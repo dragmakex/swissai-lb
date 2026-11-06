@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Provide SwissAI bearer-key pooling through the retained codex-lb dashboard and operational controls, without implying support for ChatGPT-only capabilities.
+Provide SwissAI bearer-key pooling through the SwissAI LB dashboard and operational controls, without implying support for ChatGPT-only capabilities.
 
 ## Requirements
 
@@ -26,7 +26,7 @@ Runtime, Python package, frontend and chart versions SHALL identify the SwissAI 
 
 #### Scenario: Inspect a fork release candidate
 - **WHEN** release tooling reads the current SwissAI project
-- **THEN** it validates the SwissAI lockfile entry and chart without requiring removed codex-lb paths
+- **THEN** it validates the SwissAI lockfile entry and chart without requiring removed upstream paths
 
 ### Requirement: Retained operator dashboard
 The dashboard SHALL retain the upstream React layout, themes, authentication, roles, client keys, request logs and reports. It SHALL provide add, replace, probe, pause, resume and delete actions for SwissAI keys and SHALL NOT present subscription quota, OAuth or upstream WebSocket controls as SwissAI features.
@@ -132,7 +132,7 @@ Response and conversation ownership SHALL bind to the key identity and secret ge
 - **THEN** the proxy returns `continuation_owner_unavailable` instead of sending the continuation using a different secret
 
 ### Requirement: Authoritative migrations and fresh-fork safety
-Runtime schema changes SHALL use the upstream Alembic lifecycle. Existing codex-lb and prototype databases SHALL be rejected before mutation. Concurrent fresh-fork migration checks SHALL use the existing cross-process migration lock.
+Runtime schema changes SHALL use the upstream Alembic lifecycle. Existing upstream and prototype databases SHALL be rejected before mutation. Concurrent fresh-fork migration checks SHALL use the existing cross-process migration lock.
 
 #### Scenario: Existing production database
 - **WHEN** startup is pointed at an existing database without the SwissAI ownership marker

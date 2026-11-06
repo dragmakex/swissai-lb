@@ -14,9 +14,8 @@ import { useAuthStore } from "@/features/auth/hooks/use-auth";
 import { TelemetryPayloadPreview } from "@/features/settings/components/telemetry-payload-preview";
 import { useTelemetryConsent } from "@/features/settings/hooks/use-settings";
 
-// Same published page the backend startup notice points operators to
-// (TELEMETRY_FIELDS_DOCUMENTATION in app/modules/telemetry/scheduler.py).
-const TELEMETRY_DOCS_URL = "https://soju06.github.io/codex-lb/telemetry/";
+// Keep in sync with TELEMETRY_FIELDS_DOCUMENTATION in the backend scheduler.
+const TELEMETRY_DOCS_URL = "https://github.com/dragmakex/swissai-lb/blob/HEAD/openspec/specs/swissai-key-pool/context.md#optional-telemetry";
 
 export function TelemetryConsentDialog() {
   const { t } = useTranslation();

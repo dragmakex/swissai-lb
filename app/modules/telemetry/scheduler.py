@@ -15,7 +15,9 @@ from app.modules.telemetry.snapshot import TelemetrySnapshotBuilder
 logger = logging.getLogger(__name__)
 
 TELEMETRY_INTERVAL_SECONDS = 24 * 60 * 60
-TELEMETRY_FIELDS_DOCUMENTATION = "https://soju06.github.io/codex-lb/telemetry/"
+TELEMETRY_FIELDS_DOCUMENTATION = (
+    "https://github.com/dragmakex/swissai-lb/blob/HEAD/openspec/specs/swissai-key-pool/context.md#optional-telemetry"
+)
 
 
 @dataclass(slots=True)

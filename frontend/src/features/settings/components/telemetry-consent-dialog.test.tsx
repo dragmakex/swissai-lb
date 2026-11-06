@@ -41,7 +41,7 @@ describe("TelemetryConsentDialog", () => {
     expect(within(dialog).getByRole("button", { name: "Keep disabled" })).toBeInTheDocument();
     expect(
       within(dialog).getByRole("link", { name: "Learn what is collected and why" }),
-    ).toBeInTheDocument();
+    ).toHaveAttribute("href", "https://github.com/dragmakex/swissai-lb/blob/HEAD/openspec/specs/swissai-key-pool/context.md#optional-telemetry");
   });
 
   it("persists enabled=true when the operator keeps telemetry enabled", async () => {

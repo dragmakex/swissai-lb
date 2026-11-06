@@ -171,9 +171,7 @@ def init_tracing(service_name: str = "swissai-lb", endpoint: str = "", app: Fast
         return True
 
     except ImportError:
-        logger.warning(
-            "opentelemetry packages not installed; tracing disabled. Install with: pip install codex-lb[tracing]"
-        )
+        logger.warning("opentelemetry packages not installed; tracing disabled. Install with: uv sync --extra tracing")
         return False
 
 

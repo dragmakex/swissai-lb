@@ -36,13 +36,13 @@ Only bootstrap configuration can change the upstream destination. HTTPS is requi
 
 The default host data directory is `~/.swissai-lb`; Docker uses `/var/lib/swissai-lb`. `SWISSAI_LB_DATABASE_URL` selects PostgreSQL. Every replica must mount the same encryption key. The upstream startup fingerprint check rejects mismatched keys.
 
-Alembic remains authoritative. The SwissAI revision follows the pinned upstream head; it adds key health, leases, attempts, continuations and pool settings without rewriting upstream migrations. Existing codex-lb and earlier prototype databases are deliberately refused. Start with a fresh database/volume.
+Alembic remains authoritative. The SwissAI revision follows the pinned upstream head; it adds key health, leases, attempts, continuations and pool settings without rewriting upstream migrations. Existing upstream and earlier prototype databases are deliberately refused. Start with a fresh database/volume.
 
 Back up the database, encryption key and bootstrap configuration together. Use the inherited SQLite backup machinery for live SQLite snapshots; do not copy only `store.db` while WAL writes are active. Test restoration into a separate fresh directory and verify that encrypted keys, invalid/cooldown state and dashboard access survive. Never restore only an old encryption key.
 
 ## Optional telemetry
 
-Anonymous telemetry is inactive until a persisted dashboard decision or explicit environment setting enables it. Review the payload and collector documentation first: the retained telemetry protocol and default collector belong to upstream codex-lb, not a newly provisioned SwissAI service. `SWISSAI_LB_TELEMETRY_ENDPOINT` selects the collector. Declining the first prompt sends nothing; disabling previously active telemetry sends one anonymous opt-out notice. Shutdown closes task admission and drains these notices alongside audit and fleet work before closing shared clients.
+Anonymous telemetry is inactive until a persisted dashboard decision or explicit environment setting enables it. Review the payload and collector documentation first: the retained telemetry protocol and default collector use an external shared service, not a newly provisioned SwissAI LB service. `SWISSAI_LB_TELEMETRY_ENDPOINT` selects the collector. Declining the first prompt sends nothing; disabling previously active telemetry sends one anonymous opt-out notice. Shutdown closes task admission and drains these notices alongside audit and fleet work before closing shared clients.
 
 ## Usage and observability
 

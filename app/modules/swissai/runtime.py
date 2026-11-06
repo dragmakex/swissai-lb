@@ -42,7 +42,7 @@ def verify_target_database(database_url: str | None = None):
             tables = set(inspect(engine).get_table_names())
             if tables and "swissai_key_state" not in tables:
                 raise RuntimeError(
-                    "Refusing to migrate a codex-lb or prototype database. swissai-lb v1 requires a fresh database; "
+                    "Refusing to migrate an upstream or prototype database. SwissAI LB v1 requires a fresh database; "
                     "choose a new SWISSAI_LB_DATA_DIR / SWISSAI_LB_DATABASE_URL. Existing data has not been modified."
                 )
     finally:

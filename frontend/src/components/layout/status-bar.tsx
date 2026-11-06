@@ -21,7 +21,7 @@ export function StatusBar({ onHeightChange }: StatusBarProps = {}) {
       <span>Service: {ready.data?.status === "ok" ? "Ready" : ready.isPending ? "Checking…" : "Not ready"}</span>
       <span>Routing: {settings.data?.strategy.replaceAll("_", " ") ?? "—"}</span>
       <span>SwissAI pricing: unknown</span><span>Version: {__APP_VERSION__}</span>
-      <a className="ml-auto underline" href="https://github.com/Soju06/codex-lb" target="_blank" rel="noreferrer">Upstream codex-lb</a>
+      <a className="ml-auto underline" href="https://github.com/dragmakex/swissai-lb" target="_blank" rel="noreferrer">SwissAI LB</a>
     </div>
   </footer>;
 }

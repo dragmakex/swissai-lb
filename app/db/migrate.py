@@ -1123,7 +1123,7 @@ def _non_empty_database_url(value: str) -> str:
 
 
 def _parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Database migration utility for codex-lb.")
+    parser = argparse.ArgumentParser(description="Database migration utility for SwissAI LB.")
     parser.add_argument(
         "--db-url",
         type=_non_empty_database_url,

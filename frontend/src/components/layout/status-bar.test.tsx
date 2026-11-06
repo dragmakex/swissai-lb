@@ -15,7 +15,8 @@ describe("SwissAI status bar", () => {
     expect(await screen.findByText("Routing: least inflight")).toBeInTheDocument();
     expect(screen.getByText("SwissAI pricing: unknown")).toBeInTheDocument();
     expect(screen.queryByText(/capacity weighted|weekly reset|usage synced/i)).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Upstream codex-lb" })).toHaveAttribute("href", "https://github.com/Soju06/codex-lb");
+    expect(screen.getByRole("link", { name: "SwissAI LB" })).toHaveAttribute("href", "https://github.com/dragmakex/swissai-lb");
+    expect(screen.queryByText(/codex[- ]lb/i)).not.toBeInTheDocument();
   });
   it("reports unready infrastructure without pretending it is an upstream quota outage", async () => {
     server.use(http.get("/health/ready", () => HttpResponse.json({ detail: "unavailable" }, { status: 503 })));

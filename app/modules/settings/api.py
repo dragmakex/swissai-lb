@@ -135,7 +135,7 @@ def _resolve_runtime_connect_address(request: Request) -> str:
         if resolved_host:
             return resolved_host
         return request_host
-    return "<codex-lb-ip-or-dns>"
+    return "<swissai-lb-ip-or-dns>"
 
 
 router = APIRouter(

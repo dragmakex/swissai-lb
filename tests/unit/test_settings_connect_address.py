@@ -15,7 +15,7 @@ Behaviour exercised (mirrors `app/modules/settings/api.py:48-63`):
   4. A hostname that fails to resolve (or only resolves to loopback /
      unspecified IPs) is returned verbatim as a fallback.
   5. Loopback hosts (`localhost`, `127.0.0.1`, `::1`) and missing host
-     fall back to the `<codex-lb-ip-or-dns>` placeholder.
+     fall back to the `<swissai-lb-ip-or-dns>` placeholder.
 """
 
 from __future__ import annotations
@@ -139,18 +139,18 @@ def test_loopback_host_returns_placeholder(monkeypatch: pytest.MonkeyPatch, host
     monkeypatch.delenv("SWISSAI_LB_CONNECT_ADDRESS", raising=False)
     get_settings.cache_clear()
     request = _fake_request(hostname)
-    assert _resolve_runtime_connect_address(request) == "<codex-lb-ip-or-dns>"
+    assert _resolve_runtime_connect_address(request) == "<swissai-lb-ip-or-dns>"
 
 
 def test_missing_host_returns_placeholder(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("SWISSAI_LB_CONNECT_ADDRESS", raising=False)
     get_settings.cache_clear()
     request = _fake_request(None)
-    assert _resolve_runtime_connect_address(request) == "<codex-lb-ip-or-dns>"
+    assert _resolve_runtime_connect_address(request) == "<swissai-lb-ip-or-dns>"
 
 
 def test_empty_host_returns_placeholder(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("SWISSAI_LB_CONNECT_ADDRESS", raising=False)
     get_settings.cache_clear()
     request = _fake_request("")
-    assert _resolve_runtime_connect_address(request) == "<codex-lb-ip-or-dns>"
+    assert _resolve_runtime_connect_address(request) == "<swissai-lb-ip-or-dns>"

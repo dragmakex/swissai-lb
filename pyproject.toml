@@ -1,7 +1,7 @@
 [project]
 name = "swissai-lb"
 version = "0.1.0-beta.1"
-description = "SwissAI API-key load balancer with the codex-lb dashboard"
+description = "SwissAI LB: API-key load balancing with a web dashboard"
 readme = "README.md"
 license = { file = "LICENSE" }
 authors = [{ name = "Soju06", email = "qlskssk@gmail.com" }]

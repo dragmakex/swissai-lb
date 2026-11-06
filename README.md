@@ -40,4 +40,4 @@ Local data lives in `~/.swissai-lb`. Back up the database **together with `encry
 - [Settings reference](openspec/specs/configuration-tiers/reference.md) · [Login recovery](openspec/specs/admin-auth/ops.md)
 - Development: `make ci` for local checks; `make ci-extended` for integration/database/container checks.
 
-Forked from [Soju06/codex-lb](https://github.com/Soju06/codex-lb) at `72630bbfeee9e3b0d9acfb95e2b1e706b8b0188e`. Upstream history and attribution are preserved in [LICENSE](LICENSE) and Git history. SwissAI inference replaces ChatGPT account routing; OAuth and upstream WebSocket inference are not supported.
+Based on [codex-lb](https://github.com/Soju06/codex-lb).

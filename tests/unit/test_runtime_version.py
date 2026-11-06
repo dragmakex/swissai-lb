@@ -37,7 +37,10 @@ async def test_runtime_version_reports_update_available_for_newer_github_release
     assert status.latest_version == "1.20.0"
     assert status.update_available is True
     assert status.source == "github"
-    assert status.release_url == "https://github.com/Soju06/codex-lb/releases/latest"
+    assert status.release_url == "https://github.com/dragmakex/swissai-lb/releases/latest"
+    session.get.assert_called_once()
+    assert session.get.call_args.args == ("https://api.github.com/repos/dragmakex/swissai-lb/releases/latest",)
+    assert session.get.call_args.kwargs["headers"]["User-Agent"] == "swissai-lb/1.19.0"
 
 
 @pytest.mark.asyncio
@@ -77,9 +80,10 @@ async def test_runtime_version_compares_prerelease_identifiers() -> None:
 
 
 @pytest.mark.asyncio
-async def test_runtime_version_degrades_silently_on_github_failure() -> None:
+@pytest.mark.parametrize("http_status", [404, 503])
+async def test_runtime_version_degrades_silently_on_github_failure(http_status: int) -> None:
     service = RuntimeVersionService(current_version="1.19.0", ttl_seconds=60)
-    session = _mock_session(_mock_response(status=503, json_data=None))
+    session = _mock_session(_mock_response(status=http_status, json_data=None))
 
     with patch("app.modules.runtime.service.aiohttp.ClientSession", return_value=session):
         status = await service.get_version_status()

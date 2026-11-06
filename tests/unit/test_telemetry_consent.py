@@ -180,6 +180,9 @@ async def test_scheduler_sends_nothing_on_startup_or_interval_until_consent(
         record.getMessage() for record in caplog.records if "telemetry awaits operator consent" in record.getMessage()
     ]
     assert len(notices) == 1
-    assert "https://soju06.github.io/codex-lb/telemetry/" in notices[0]
+    assert (
+        "https://github.com/dragmakex/swissai-lb/blob/HEAD/openspec/specs/swissai-key-pool/context.md#optional-telemetry"
+        in notices[0]
+    )
     assert "SWISSAI_LB_TELEMETRY_ENABLED=true" in notices[0]
     assert scheduler._task is None
