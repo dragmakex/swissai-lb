@@ -1,73 +1,78 @@
-# Project-specific
-refs/
-poc/
+# Secrets and local runtime data
+.env*
+!.env.example
+.envrc
+*.key
+*.pem
+*.p12
+*.pfx
+bootstrap.token
+*.db
+*.db-*
+*.sqlite
+*.sqlite-*
+*.sqlite3
+*.sqlite3-*
+.swissai-lb/
+.codex-lb/
+/swissai-lb-data/
+/data/
+certs/
 
-# Python
+# Python environments, caches and build output
 .venv/
+.python-version
 __pycache__/
 *.py[cod]
+*.egg-info/
 .pytest_cache/
 .hypothesis/
 .mypy_cache/
 .ruff_cache/
-
-# Env/config
-.env
-.env.*
-.envrc
-!.env.example
-.python-version
-
-# Build artifacts
+.ty_cache/
+.coverage*
+htmlcov/
 build/
 dist/
 site/
 /target/
-crates/**/target/
 app/static/
-deploy/helm/*/charts/
 
-# Node
+# Frontend dependencies, generated bundles and test artifacts
 node_modules/
-frontend/node_modules/
-frontend/dist/
-frontend/coverage/
+coverage/
+*.tsbuildinfo
+playwright-report/
+test-results/
+blob-report/
 
-# Editors/OS
+# Logs and generated traffic captures (never commit request bodies)
+*.log
+*.sarif
+scripts/traffic_analysis/output/*
+!scripts/traffic_analysis/output/.gitkeep
+
+# Local tools, worktrees, notes and OS/editor files
+.local/
+.worktrees/
+.agents/worktrees/
+.agents/hooks/state/
+.agents/.personality_migration
+.agents/version.json
+.agents/log/
+.agents/scheduled_tasks.lock
+.sisyphus/
+.specstory/
+.omx/
+.superpowers/
+refs/
+poc/
+PROMPT.md
+SUMMARY.md
+DECISIONS.md
 .DS_Store
 .idea/
 .vscode/
 *.swp
 *.swo
 *~
-
-# Local
-.local/
-.worktrees/
-certs/
-
-.codex-lb/
-.sisyphus/
-
-.specstory/
-
-.agents/hooks/state/
-.agents/.personality_migration
-.agents/version.json
-.agents/log/
-.agents/scheduled_tasks.lock
-.venv
-
-# Local Responses traffic captures and generated parity reports
-scripts/traffic_analysis/output/*.jsonl
-scripts/traffic_analysis/output/*.json
-scripts/traffic_analysis/output/*.md
-scripts/traffic_analysis/output/*.txt
-!scripts/traffic_analysis/output/.gitkeep
-
-.omx/
-PROMPT.md
-SUMMARY.md
-DECISIONS.md
-.superpowers/
-.agents/worktrees/

@@ -1,6 +1,10 @@
+import { SwissAIOverview } from "@/features/swissai/pool-overview";
+import { useSwissAIKeys } from "@/features/swissai/hooks";
+import { RecentRequestHealth } from "@/features/swissai/recent-health";
+import { downloadRequestLogs } from "@/features/swissai/request-log-export";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Trans, useTranslation } from "react-i18next";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { Columns3, RefreshCw, RotateCcw } from "lucide-react";
 
@@ -15,13 +19,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { SpinnerBlock } from "@/components/ui/spinner";
-import { useDialogState } from "@/hooks/use-dialog-state";
-import { useAccountMutations } from "@/features/accounts/hooks/use-accounts";
-import { ResetCreditConfirmDialog } from "@/features/accounts/components/reset-credit-confirm-dialog";
-import { AccountCards } from "@/features/dashboard/components/account-cards";
-import { AccountList } from "@/features/dashboard/components/account-list";
-import { AccountSummaryLine } from "@/features/dashboard/components/account-summary-line";
-import { AccountViewModeToggle } from "@/features/dashboard/components/account-view-mode-toggle";
 import { DashboardSkeleton } from "@/features/dashboard/components/dashboard-skeleton";
 import { ConversationsView } from "@/features/dashboard/components/conversations-view";
 import { ConversationTimeframeSelect } from "@/features/dashboard/components/filters/conversation-timeframe-select";
@@ -30,8 +27,7 @@ import { OverviewTimeframeSelect } from "@/features/dashboard/components/filters
 import { RequestFilters } from "@/features/dashboard/components/filters/request-filters";
 import { RecentRequestsTable } from "@/features/dashboard/components/recent-requests-table";
 import { StatsGrid } from "@/features/dashboard/components/stats-grid";
-import { UsageDonuts } from "@/features/dashboard/components/usage-donuts";
-import { WeeklyCreditsPaceCard } from "@/features/dashboard/components/weekly-credits-pace-card";
+import { TelemetryConsentDialog } from "@/features/settings/components/telemetry-consent-dialog";
 import { useAuthStore, usePermission } from "@/features/auth/hooks/use-auth";
 import { useDashboard, useDashboardProjections } from "@/features/dashboard/hooks/use-dashboard";
 import { useConversations } from "@/features/dashboard/hooks/use-conversations";
@@ -44,15 +40,13 @@ import {
   parseDashboardView,
   parseConversationTimeframe,
   parseOverviewTimeframe,
-  type AccountSummary,
   type ConversationTimeframe,
   type OverviewTimeframe,
 } from "@/features/dashboard/schemas";
-import { useDashboardPreferencesStore } from "@/hooks/use-dashboard-preferences";
 import { useThemeStore } from "@/hooks/use-theme";
 import { REQUEST_STATUS_LABELS } from "@/utils/constants";
 import { getErrorMessageOrNull } from "@/utils/errors";
-import { formatModelLabel, formatCurrency, formatSlug } from "@/utils/formatters";
+import { formatModelLabel, formatSlug } from "@/utils/formatters";
 import { usePrivacyStore } from "@/hooks/use-privacy";
 
 const MODEL_OPTION_DELIMITER = ":::";
@@ -72,19 +66,12 @@ export function DashboardPage() {
     restoreDefaultLayout,
   } = useRequestLogTablePreferences();
   const resolvedLanguage = i18n.resolvedLanguage;
-  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const isDark = useThemeStore((s) => s.theme === "dark");
-  const showAccountBurnrate = useDashboardPreferencesStore((s) => s.accountBurnrateEnabled);
-  const accountViewMode = useDashboardPreferencesStore((s) => s.accountViewMode);
-  const accountListSort = useDashboardPreferencesStore((s) => s.accountListSort);
-  const setAccountViewMode = useDashboardPreferencesStore((s) => s.setAccountViewMode);
-  const setAccountListSort = useDashboardPreferencesStore((s) => s.setAccountListSort);
   // Each surface follows the permission its backend route demands, not the
   // coarse `write` alias: conversations and archives need `conversations:read`,
   // account actions `accounts:write`, the API-key filter `api_keys:read`.
-  const canWriteAccounts = usePermission("accounts:write");
   const canReadApiKeys = usePermission("api_keys:read");
   const initialized = useAuthStore((state) => state.initialized);
   const hasConversationsRead = usePermission("conversations:read");
@@ -115,6 +102,7 @@ export function DashboardPage() {
   const dashboardTimeframe =
     dashboardView === "conversations" ? conversationTimeframe : overviewTimeframe;
   const dashboardQuery = useDashboard(dashboardTimeframe);
+  const keysQuery = useSwissAIKeys();
   const [retainedDashboardLoadError, setRetainedDashboardLoadError] =
     useState<RetainedDashboardLoadError | null>(null);
   const [overviewRetryTimeframe, setOverviewRetryTimeframe] =
@@ -130,9 +118,6 @@ export function DashboardPage() {
     enabled: dashboardView === "request-logs",
     allowApiKeyFilters: canReadApiKeys,
   });
-  const { resumeMutation, limitWarmupMutation } = useAccountMutations();
-  type ResetCreditDialogTarget = { accountId: string; availableResetCredits: number };
-  const resetCreditDialog = useDialogState<ResetCreditDialogTarget>();
 
   const activeListIsFetching = dashboardView === "request-logs"
     ? logsQuery.isFetching
@@ -179,39 +164,6 @@ export function DashboardPage() {
     [canReadConversations, searchParams, setSearchParams],
   );
 
-  const handleAccountAction = useCallback(
-    (account: AccountSummary, action: string) => {
-      switch (action) {
-        case "details":
-          navigate(`/accounts?selected=${account.accountId}`);
-          break;
-        case "resume":
-          if (canWriteAccounts) {
-            void resumeMutation.mutateAsync(account.accountId);
-          }
-          break;
-        case "reauth":
-          navigate(`/accounts?selected=${account.accountId}`);
-          break;
-        case "warmup-toggle":
-          if (canWriteAccounts) {
-            void limitWarmupMutation.mutateAsync({
-              accountId: account.accountId,
-              enabled: !account.limitWarmupEnabled,
-            });
-          }
-          break;
-        case "reset-credit":
-          resetCreditDialog.show({
-            accountId: account.accountId,
-            availableResetCredits: account.availableResetCredits ?? 0,
-          });
-          break;
-      }
-    },
-    [canWriteAccounts, limitWarmupMutation, navigate, resetCreditDialog, resumeMutation],
-  );
-
   const handleConversationClick = useCallback(
     (conversationId: string) => {
       updateFilters({ conversationId, offset: 0 });
@@ -236,11 +188,11 @@ export function DashboardPage() {
       logPage?.requests ?? [],
       {
         isDark,
-        showAccountBurnrate,
+        showAccountBurnrate: false,
       },
       projectionsQuery.data,
     );
-  }, [overview, logPage, isDark, showAccountBurnrate, projectionsQuery.data, resolvedLanguage]);
+  }, [overview, logPage, isDark, projectionsQuery.data, resolvedLanguage]);
 
   const accountOptions = useMemo(() => {
     const entries = new Map<string, { label: string; isEmail: boolean }>();
@@ -248,6 +200,14 @@ export function DashboardPage() {
       const raw = account.displayName || account.email || account.accountId;
       const isEmail = !!account.email && raw === account.email;
       entries.set(account.accountId, { label: raw, isEmail });
+    }
+    for (const key of keysQuery.data ?? []) {
+      entries.set(key.id, { label: key.name, isEmail: false });
+    }
+    for (const request of logPage?.requests ?? []) {
+      if (request.modelSourceKind === "swissai" && request.modelSourceId && !entries.has(request.modelSourceId)) {
+        entries.set(request.modelSourceId, { label: request.upstreamKeyLabel ?? request.modelSourceId, isEmail: false });
+      }
     }
     return (optionsQuery.data?.accountIds ?? []).map((accountId) => {
       const entry = entries.get(accountId);
@@ -257,7 +217,7 @@ export function DashboardPage() {
         isEmail: entry?.isEmail ?? false,
       };
     });
-  }, [optionsQuery.data?.accountIds, overview?.accounts]);
+  }, [optionsQuery.data?.accountIds, overview?.accounts, keysQuery.data, logPage?.requests]);
 
   const apiKeyOptions = useMemo(
     () =>
@@ -284,7 +244,7 @@ export function DashboardPage() {
     if (!conv || !filters.conversationId) {
       return null;
     }
-    const cost = formatCurrency(conv.aggregatedCostUsd);
+    const cost = t("dashboard.conversation.unknownCost");
     const count = conv.requestCount;
     const suffixParts: string[] = [];
 
@@ -399,6 +359,7 @@ export function DashboardPage() {
 
   return (
     <div className="animate-fade-in-up space-y-8">
+      <TelemetryConsentDialog />
       {/* Page header */}
       <div className="flex items-start justify-between">
         <div>
@@ -471,54 +432,8 @@ export function DashboardPage() {
         <>
           <StatsGrid stats={view.stats} />
 
-          {view.weeklyCreditPace ? (
-            <div className="grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]">
-              <UsageDonuts
-                primaryItems={view.primaryUsageItems}
-                secondaryItems={view.secondaryUsageItems}
-                primaryTotal={overview?.summary.primaryWindow.capacityCredits ?? 0}
-                secondaryTotal={overview?.summary.secondaryWindow?.capacityCredits ?? 0}
-                primaryCenterValue={view.primaryTotal}
-                secondaryCenterValue={view.secondaryTotal}
-                safeLinePrimary={view.safeLinePrimary}
-                safeLineSecondary={view.safeLineSecondary}
-              />
-              <WeeklyCreditsPaceCard pace={view.weeklyCreditPace} />
-            </div>
-          ) : (
-            <UsageDonuts
-              primaryItems={view.primaryUsageItems}
-              secondaryItems={view.secondaryUsageItems}
-              primaryTotal={overview?.summary.primaryWindow.capacityCredits ?? 0}
-              secondaryTotal={overview?.summary.secondaryWindow?.capacityCredits ?? 0}
-              primaryCenterValue={view.primaryTotal}
-              secondaryCenterValue={view.secondaryTotal}
-              safeLinePrimary={view.safeLinePrimary}
-              safeLineSecondary={view.safeLineSecondary}
-            />
-          )}
-
-          <section className="space-y-4">
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="flex min-w-0 flex-wrap items-center gap-3">
-                <h2 className="text-[13px] font-medium uppercase tracking-wider text-muted-foreground">{t("accounts.page.title")}</h2>
-                <AccountSummaryLine accounts={overview?.accounts ?? []} />
-              </div>
-              <div className="h-px min-w-8 flex-1 bg-border" />
-              <AccountViewModeToggle value={accountViewMode} onChange={setAccountViewMode} />
-            </div>
-            {accountViewMode === "list" ? (
-              <AccountList
-                accounts={overview?.accounts ?? []}
-                readOnly={!canWriteAccounts}
-                sort={accountListSort}
-                onSortChange={setAccountListSort}
-                onAction={handleAccountAction}
-              />
-            ) : (
-              <AccountCards accounts={overview?.accounts ?? []} readOnly={!canWriteAccounts} onAction={handleAccountAction} />
-            )}
-          </section>
+          <SwissAIOverview />
+          {dashboardView === "request-logs" ? <RecentRequestHealth requests={logPage?.requests ?? []} /> : null}
 
           <section className="space-y-4">
             <div className="flex flex-wrap items-center gap-3">
@@ -560,6 +475,10 @@ export function DashboardPage() {
                       })}
                     </DropdownMenuContent>
                   </DropdownMenu>
+                  <Button type="button" variant="outline" size="sm" disabled={!logPage?.requests.length}
+                    onClick={() => downloadRequestLogs(logPage?.requests ?? [])}>
+                    Export visible page
+                  </Button>
                   <Button
                     type="button"
                     variant="ghost"
@@ -660,14 +579,6 @@ export function DashboardPage() {
         </>
       )}
 
-      {resetCreditDialog.data ? (
-        <ResetCreditConfirmDialog
-          open={resetCreditDialog.open}
-          accountId={resetCreditDialog.data.accountId}
-          summaryAvailableCount={resetCreditDialog.data.availableResetCredits}
-          onOpenChange={resetCreditDialog.onOpenChange}
-        />
-      ) : null}
 
     </div>
   );

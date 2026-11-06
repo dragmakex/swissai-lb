@@ -7,7 +7,6 @@ import anyio
 import pytest
 
 from app.core.clients import proxy_websocket as client
-from app.core.clients.native_egress import NativeWebSocketRequest
 from app.modules.proxy import service as proxy_service
 from app.modules.proxy.request_policy import apply_api_key_enforcement
 from tests.unit.test_proxy_utils import (
@@ -15,7 +14,7 @@ from tests.unit.test_proxy_utils import (
     _repo_factory,
     _RequestLogsRecorder,
 )
-from tests.unit.test_proxy_websocket_client import _FakeNativeWebSocket
+from tests.unit.test_proxy_websocket_client import _FakeConnection
 from tests.unit.test_proxy_websocket_model_source_guard import _api_key
 
 
@@ -50,9 +49,8 @@ async def test_subscription_handshake_uses_normalized_request_not_inbound_hint(
     # Response-observed tier is deliberately different: it is not wire intent.
     state.service_tier = "flex"
     state.actual_service_tier = "flex"
-    native = AsyncMock()
-    native.websocket.return_value = _FakeNativeWebSocket()
-    monkeypatch.setattr(client, "discover_native_egress_client", lambda: native)
+    connector = AsyncMock(return_value=_FakeConnection())
+    monkeypatch.setattr(client, "websocket_connect", connector)
     monkeypatch.setattr(service, "_resolve_upstream_route_for_account", AsyncMock(return_value=None))
 
     # When the real service opener reaches the real persistent client builder.
@@ -64,12 +62,12 @@ async def test_subscription_handshake_uses_normalized_request_not_inbound_hint(
         )
         await upstream.close()
 
-    # Inspect the emitted handshake at the native transport boundary.
-    request = native.websocket.await_args.args[0]
-    assert isinstance(request, NativeWebSocketRequest)
+    # Inspect the emitted handshake at the Python transport boundary.
+    assert connector.await_args is not None
+    headers = connector.await_args.kwargs["additional_headers"]
     expected = "model=gpt-5" + (f";tier={tier}" if tier is not None else "")
-    assert request.headers.get("x-codex-routing-hint") == expected
-    assert "X-Codex-Routing-Hint" not in request.headers
+    assert headers.get("x-codex-routing-hint") == expected
+    assert "X-Codex-Routing-Hint" not in headers
 
 
 @pytest.mark.asyncio
@@ -87,9 +85,8 @@ async def test_model_less_preconnect_omits_hint(monkeypatch: pytest.MonkeyPatch,
         api_key_reservation=None,
         started_at=anyio.current_time(),
     )
-    native = AsyncMock()
-    native.websocket.return_value = _FakeNativeWebSocket()
-    monkeypatch.setattr(client, "discover_native_egress_client", lambda: native)
+    connector = AsyncMock(return_value=_FakeConnection())
+    monkeypatch.setattr(client, "websocket_connect", connector)
     monkeypatch.setattr(service, "_resolve_upstream_route_for_account", AsyncMock(return_value=None))
 
     # When opening through the production service and client.
@@ -102,18 +99,17 @@ async def test_model_less_preconnect_omits_hint(monkeypatch: pytest.MonkeyPatch,
         await upstream.close()
 
     # Then no guessed model or tier is emitted.
-    request = native.websocket.await_args.args[0]
-    assert isinstance(request, NativeWebSocketRequest)
-    assert "x-codex-routing-hint" not in request.headers
+    assert connector.await_args is not None
+    headers = connector.await_args.kwargs["additional_headers"]
+    assert "x-codex-routing-hint" not in headers
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("live", [False, True])
 async def test_unopted_client_and_live_do_not_forward_hint(monkeypatch: pytest.MonkeyPatch, live: bool) -> None:
     # Given a low-level caller without trusted Responses routing context.
-    native = AsyncMock()
-    native.websocket.return_value = _FakeNativeWebSocket()
-    monkeypatch.setattr(client, "discover_native_egress_client", lambda: native)
+    connector = AsyncMock(return_value=_FakeConnection())
+    monkeypatch.setattr(client, "websocket_connect", connector)
     headers = {"X-Codex-Routing-Hint": "model=spoof;tier=priority"}
 
     # When opening live or a standalone Responses connection without opt-in.
@@ -132,6 +128,6 @@ async def test_unopted_client_and_live_do_not_forward_hint(monkeypatch: pytest.M
         await upstream.close()
 
     # Then inbound hints remain stripped and account-id alone is not opt-in.
-    request = native.websocket.await_args.args[0]
-    assert isinstance(request, NativeWebSocketRequest)
-    assert all(key.lower() != "x-codex-routing-hint" for key in request.headers)
+    assert connector.await_args is not None
+    headers = connector.await_args.kwargs["additional_headers"]
+    assert all(key.lower() != "x-codex-routing-hint" for key in headers)

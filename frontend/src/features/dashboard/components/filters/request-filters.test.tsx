@@ -55,7 +55,7 @@ describe("RequestFilters API key filter", () => {
     renderFilters({}, EMPTY_OPTIONS, { showApiKeyFilter: false });
 
     expect(screen.queryByRole("button", { name: "API Keys" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Accounts" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "SwissAI keys" })).toBeInTheDocument();
   });
 });
 

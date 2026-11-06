@@ -239,17 +239,14 @@ describe("dashboard flow integration", () => {
     const expectHealthySurfaces = () => {
       expect(screen.getByText("Requests (7d)")).toBeInTheDocument();
       expect(screen.getByText("424.24K")).toBeInTheDocument();
-      expect(screen.getByText("Account burn projection (5h/7d)")).toBeInTheDocument();
-      expect(screen.getByText("0.4 / 0.1")).toBeInTheDocument();
-      expect(screen.getByRole("heading", { name: "5-Hour Credits" })).toBeInTheDocument();
-      expect(screen.getByText("6,055")).toBeInTheDocument();
-      expect(
-        screen.getByRole("button", { name: "Enable limit warm-up for Healthy Overview Account" }),
-      ).toBeInTheDocument();
+      expect(screen.getByText("SwissAI pricing is unknown")).toBeInTheDocument();
+      expect(screen.getByRole("region", { name: "SwissAI pool health" })).toBeInTheDocument();
+      expect(screen.queryByText("Account burn projection (5h/7d)")).not.toBeInTheDocument();
+      expect(screen.queryByRole("heading", { name: "5-Hour Credits" })).not.toBeInTheDocument();
     };
 
     await waitFor(expectHealthySurfaces);
-    expect(screen.getByRole("heading", { name: "Accounts" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "SwissAI pool health" })).toBeInTheDocument();
     expect(container.querySelectorAll('[data-slot="skeleton"]')).toHaveLength(0);
     expect(errorAlert).toHaveTextContent(REQUEST_LOG_OUTAGE_MESSAGE);
     expect(requestLogs.getByRole("button", { name: "Retry" })).toBeInTheDocument();

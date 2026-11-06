@@ -7,7 +7,7 @@ import {
   localDateISO,
 } from "./date";
 
-const REPORTS_TIMEZONE_STORAGE_KEY = "codex-lb-reports-timezone";
+const REPORTS_TIMEZONE_STORAGE_KEY = "swissai-lb-reports-timezone";
 const originalLocalStorageDescriptor = Object.getOwnPropertyDescriptor(window, "localStorage");
 
 describe("reports date helpers", () => {

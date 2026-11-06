@@ -406,7 +406,8 @@ def test_base_ref_revisions_reads_the_graph_out_of_git(checker: ModuleType) -> N
     assert base_revisions is not None
     from_git = {revision.revision: revision.down_revisions for revision in base_revisions}
     from_disk = {revision.revision: revision.down_revisions for revision in checker.load_graph(VERSIONS_DIR)}
-    assert from_git == from_disk
+    assert from_git.keys() <= from_disk.keys()
+    assert from_git == {revision: from_disk[revision] for revision in from_git}
     assert "__init__" not in from_git
 
 

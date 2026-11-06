@@ -273,7 +273,7 @@ def _configure_tiny_generic_ingress_budget(monkeypatch: pytest.MonkeyPatch) -> N
         ("application/json", "gzip"),
     ],
 )
-async def test_production_stack_keeps_dedicated_uploads_auth_first_above_generic_limit(
+async def test_production_middleware_keeps_isolated_upload_probes_auth_first_above_generic_limit(
     monkeypatch: pytest.MonkeyPatch,
     path: str,
     content_type: str,
@@ -292,7 +292,10 @@ async def test_production_stack_keeps_dedicated_uploads_auth_first_above_generic
         authorization_calls.append(request.url.path)
         raise ProxyAuthError("missing API key")
 
+    from tests.unit.test_multipart_openapi import mount_legacy_upload_probe
+
     app = create_app()
+    mount_legacy_upload_probe(app)
     app.dependency_overrides[validate_dashboard_session] = reject_dashboard
     app.dependency_overrides[validate_proxy_api_key] = reject_proxy
     transport = ASGITransport(app=app)
@@ -307,6 +310,19 @@ async def test_production_stack_keeps_dedicated_uploads_auth_first_above_generic
         response = await client.post(path, content=body, headers=headers)
     assert response.status_code == (403 if path.startswith("/api/") else 401)
     assert authorization_calls == [path]
+    assert body.iterations == 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("path", _DEDICATED_MULTIPART_PATHS)
+async def test_production_refuses_retired_uploads_without_reading_bodies(path: str) -> None:
+    await get_firewall_ip_cache().set("127.0.0.1", True)
+    body = _TrackingBody(b"unread")
+    async with AsyncClient(transport=ASGITransport(app=create_app()), base_url="http://testserver") as client:
+        response = await client.post(
+            path, content=body, headers={"Content-Type": "multipart/form-data; boundary=unused"}
+        )
+    assert response.status_code in ({404, 405} if path.startswith("/api/") else {501})
     assert body.iterations == 0
 
 

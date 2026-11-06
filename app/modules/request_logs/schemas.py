@@ -15,6 +15,9 @@ class RequestLogCostBreakdown(DashboardModel):
 
 
 class RequestLogEntry(DashboardModel):
+    attempt_count: int = 0
+    failover_reason: str | None = None
+    upstream_key_label: str | None = None
     sticky_key_source: str | None = None
     sticky_kind: str | None = None
     sticky_key_hash: str | None = None
@@ -32,6 +35,8 @@ class RequestLogEntry(DashboardModel):
     source: str | None = None
     model_source_id: str | None = None
     model_source_kind: str | None = None
+    route: str | None = None
+    stream: bool | None = None
     useragent: str | None = None
     useragent_group: str | None = None
     client_ip: str | None = None

@@ -5,7 +5,6 @@ import { useDateDisplayFormatStore, type DateDisplayFormat } from "@/hooks/use-d
 import { cn } from "@/lib/utils";
 import {
 	formatCompactNumber,
-	formatCurrency,
 	formatTimeLong,
 } from "@/utils/formatters";
 
@@ -121,7 +120,7 @@ export function ApiKeyInfo({
 								</span>
 								<span className="mx-1 text-muted-foreground/40">|</span>
 								<span className="font-medium">
-									{formatCurrency(usage.totalCostUsd)}
+									{"—"}
 								</span>
 							</span>
 						) : (

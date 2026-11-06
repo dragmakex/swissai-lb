@@ -1,10 +1,8 @@
 from __future__ import annotations
 
 import asyncio
-import base64
 import json
 import logging
-from collections.abc import Mapping
 from time import perf_counter
 
 import pytest
@@ -12,34 +10,11 @@ from sqlalchemy import select
 
 import app.core.audit.service as audit_service_module
 from app.core import shutdown as shutdown_state
-from app.core.auth import generate_unique_account_id
 from app.core.utils.time import utcnow
 from app.db.models import AuditLog
 from app.db.session import SessionLocal
 
 pytestmark = pytest.mark.unit
-
-
-def _encode_jwt(payload: Mapping[str, object]) -> str:
-    raw = json.dumps(payload, separators=(",", ":")).encode("utf-8")
-    body = base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii")
-    return f"header.{body}.sig"
-
-
-def _make_auth_json(account_id: str, email: str) -> dict[str, object]:
-    payload = {
-        "email": email,
-        "chatgpt_account_id": account_id,
-        "https://api.openai.com/auth": {"chatgpt_plan_type": "plus"},
-    }
-    return {
-        "tokens": {
-            "idToken": _encode_jwt(payload),
-            "accessToken": "access-token",
-            "refreshToken": "refresh-token",
-            "accountId": account_id,
-        },
-    }
 
 
 async def _wait_for_audit_log(action: str, *, attempts: int = 20) -> AuditLog:
@@ -56,46 +31,31 @@ async def _wait_for_audit_log(action: str, *, attempts: int = 20) -> AuditLog:
 
 
 @pytest.mark.asyncio
-async def test_account_creation_writes_audit_log(async_client) -> None:
-    email = "audit@example.com"
-    raw_account_id = "acc_audit"
-    expected_account_id = generate_unique_account_id(raw_account_id, email)
+async def test_swissai_key_creation_writes_redacted_audit_log(async_client, monkeypatch) -> None:
+    from unittest.mock import AsyncMock
 
+    from app.modules.swissai import api
+
+    monkeypatch.setattr(api, "probe", AsyncMock(return_value={"ok": True, "status": 200}))
+    secret = "sk-rc-test-audit-only-00000"
     response = await async_client.post(
-        "/api/accounts/import",
-        files={"auth_json": ("auth.json", json.dumps(_make_auth_json(raw_account_id, email)), "application/json")},
-        headers={"x-request-id": "audit-account-create"},
+        "/api/swissai-keys",
+        json={"name": "Audit key", "apiKey": secret},
+        headers={"x-request-id": "audit-key-create"},
     )
-
-    assert response.status_code == 200
-
-    audit_log = await _wait_for_audit_log("account_created")
-    assert audit_log.request_id == "audit-account-create"
-    assert audit_log.details == json.dumps({"account_id": expected_account_id})
+    assert response.status_code == 201
+    assert secret not in response.text
+    audit_log = await _wait_for_audit_log("swissai_key_created")
+    assert audit_log.request_id == "audit-key-create"
+    assert audit_log.details == json.dumps({"key_id": response.json()["id"]})
 
 
 @pytest.mark.asyncio
-async def test_account_export_writes_audit_log(async_client) -> None:
-    email = "audit-export@example.com"
-    raw_account_id = "acc_audit_export"
-    expected_account_id = generate_unique_account_id(raw_account_id, email)
-
-    create_response = await async_client.post(
-        "/api/accounts/import",
-        files={"auth_json": ("auth.json", json.dumps(_make_auth_json(raw_account_id, email)), "application/json")},
-    )
-    assert create_response.status_code == 200
-
-    export_response = await async_client.post(
-        f"/api/accounts/{expected_account_id}/export/auth",
-        headers={"x-request-id": "audit-account-export"},
-    )
-
-    assert export_response.status_code == 200
-
-    audit_log = await _wait_for_audit_log("account_auth_exported")
-    assert audit_log.request_id == "audit-account-export"
-    assert audit_log.details == json.dumps({"account_id": expected_account_id})
+async def test_swissai_credential_export_is_not_registered(async_client) -> None:
+    response = await async_client.post("/api/accounts/missing/export/auth")
+    assert response.status_code == 405
+    async with SessionLocal() as session:
+        assert await session.scalar(select(AuditLog).where(AuditLog.action == "account_auth_exported")) is None
 
 
 @pytest.mark.asyncio

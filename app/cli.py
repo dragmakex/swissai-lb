@@ -59,7 +59,7 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
 
     admin = subparsers.add_parser(
         "admin",
-        help="Host recovery commands that act on the database directly (see docs/sso.md).",
+        help="Host recovery commands that act on the database directly (see openspec/specs/admin-auth/ops.md).",
         formatter_class=_CliHelpFormatter,
     )
     admin_subparsers = admin.add_subparsers(dest="admin_command")
@@ -172,7 +172,7 @@ def main(argv: Sequence[str] | None = None) -> None:
 
 
 def _run_admin_command(args: argparse.Namespace) -> None:
-    """Host recovery commands (docs/sso.md). Imported late: the server path must not pay for them."""
+    """Host recovery commands; import late so normal startup does not pay for them."""
 
     from app.admin_cli import run_admin_command
 

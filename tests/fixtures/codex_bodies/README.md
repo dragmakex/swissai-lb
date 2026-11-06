@@ -5,9 +5,9 @@ the proxy's request-path work can be measured against what the client actually
 sends instead of against a hand-written guess.
 
 Normative contract:
-[`openspec/specs/compatibility-tooling`](https://github.com/Soju06/codex-lb/tree/main/openspec/specs/compatibility-tooling)
-(the capture lane and its refusals). Operator walkthrough:
-[`docs/traffic-parity.md`](../../../docs/traffic-parity.md).
+[`openspec/specs/compatibility-tooling`](../../../openspec/specs/compatibility-tooling/spec.md)
+(the capture lane and its refusals). These are retained legacy regression
+fixtures, not a supported SwissAI client-setup guide.
 
 `provenance.json` is the machine-readable source of truth. The table below is
 rendered from the same facts, and `tests/unit/test_codex_body_fixtures.py` pins
@@ -118,7 +118,7 @@ What this costs: the corpus no longer shows Codex's own prompt text, tool
 descriptions or schema property names. Nothing in the gate reads them, and the
 gate asserts that the recorded skeleton is identical before and after the
 rebuild. For what Codex actually sends, read the divergence table below and
-`docs/traffic-parity.md`, not the fixture.
+the tooling under `scripts/traffic_analysis/`, not the fixture.
 
 ## What the captures established about provider portability
 
@@ -161,7 +161,7 @@ strings, JSON Schema property names, titles and `enum` values, and any tool name
 outside Codex's own list — four of the six `collaboration` tool names in the
 Lite capture are synthesised, and only `followup_task` and `spawn_agent`
 survive. The capture manifest (`body_summary`) reports the structural facts at
-capture time, and `docs/traffic-parity.md` walks the lane.
+capture time; the retained capture tooling lives under `scripts/traffic_analysis/`.
 
 | Field | Synthetic | Real 0.154.0 |
 |---|---|---|

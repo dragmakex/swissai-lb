@@ -117,7 +117,7 @@ export function LimitRuleCard({ rule, onChange, onRemove }: LimitRuleCardProps) 
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {LIMIT_TYPES.map((k) => (
+              {LIMIT_TYPES.filter(k => k.endsWith("tokens")).map((k) => (
                 <SelectItem key={k} value={k}>
                   {t(`apiKeys.limitTypes.${k}`, { defaultValue: LIMIT_TYPE_LABELS[k] })}
                 </SelectItem>

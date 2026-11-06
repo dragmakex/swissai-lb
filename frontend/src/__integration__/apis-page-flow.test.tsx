@@ -42,9 +42,9 @@ describe("apis page integration", () => {
 		renderWithProviders(<App />);
 
 		await user.click(await screen.findByRole("button", { name: "Create API Key" }));
-		const createDialog = await screen.findByRole("dialog", { name: "Create API key" });
+		const createDialog = await screen.findByRole("dialog", { name: "Create client key" });
 		await user.type(within(createDialog).getByLabelText("Name"), "Created from APIs page");
-		await user.click(within(createDialog).getByRole("button", { name: "Create" }));
+		await user.click(within(createDialog).getByRole("button", { name: "Save client key" }));
 
 		const dialog = await screen.findByRole("dialog", { name: "API key created" });
 		expect(within(dialog).getByText(/sk-test-generated-/)).toBeInTheDocument();
@@ -54,7 +54,7 @@ describe("apis page integration", () => {
 		expect(await screen.findByRole("button", { name: /Created from APIs page/i })).toBeInTheDocument();
 	});
 
-	it("creates a key with a selectable reasoning-effort policy", async () => {
+	it("preserves restrictive-empty model policy instead of exposing unsupported provider overrides", async () => {
 		const user = userEvent.setup();
 		let requestBody: unknown;
 		server.use(
@@ -66,21 +66,15 @@ describe("apis page integration", () => {
 		renderWithProviders(<App />);
 
 		await user.click(await screen.findByRole("button", { name: "Create API Key" }));
-		const createDialog = await screen.findByRole("dialog", { name: "Create API key" });
+		const createDialog = await screen.findByRole("dialog", { name: "Create client key" });
 		await user.type(within(createDialog).getByLabelText("Name"), "Selectable effort key");
-		await user.click(within(createDialog).getByRole("button", { name: "Allowed efforts: All efforts" }));
-		await user.click(screen.getByRole("menuitemcheckbox", { name: /^Low$/ }));
-		await user.keyboard("{Escape}");
-
-		expect(within(createDialog).getByLabelText("Enforced Effort")).toBeDisabled();
-
-		await user.click(within(createDialog).getByRole("button", { name: "Create" }));
-		await waitFor(() => {
-			expect(requestBody).toMatchObject({
-				allowedReasoningEfforts: ["low"],
-				enforcedReasoningEffort: null,
-			});
-		});
+		await user.click(within(createDialog).getByRole("switch", { name: "Restrict models" }));
+		expect(within(createDialog).getByRole("button", { name: "No models selected" })).toBeInTheDocument();
+		expect(within(createDialog).queryByLabelText("Enforced Effort")).not.toBeInTheDocument();
+		await user.click(within(createDialog).getByRole("button", { name: "Save client key" }));
+		await waitFor(() => expect(requestBody).toMatchObject({ allowedModels: [], assignedSourceIds: null }));
+		expect(requestBody).not.toHaveProperty("allowedReasoningEfforts");
+		expect(requestBody).not.toHaveProperty("enforcedReasoningEffort");
 	});
 
 	it("edits, toggles, regenerates, and deletes the selected key", async () => {
@@ -92,11 +86,11 @@ describe("apis page integration", () => {
 		await user.click(screen.getByRole("button", { name: "Actions" }));
 		await user.click(screen.getByRole("menuitem", { name: "Edit" }));
 
-		const editDialog = await screen.findByRole("dialog", { name: "Edit API key" });
+		const editDialog = await screen.findByRole("dialog", { name: "Edit client key" });
 		const nameInput = within(editDialog).getByLabelText("Name");
 		await user.clear(nameInput);
 		await user.type(nameInput, "Updated from APIs page");
-		await user.click(within(editDialog).getByRole("button", { name: "Save" }));
+		await user.click(within(editDialog).getByRole("button", { name: "Save client key" }));
 
 		expect(await screen.findByRole("heading", { name: "Updated from APIs page" })).toBeInTheDocument();
 
@@ -119,7 +113,7 @@ describe("apis page integration", () => {
 		});
 	});
 
-	it("shows backend errors from API mutations in the page alert", async () => {
+	it("keeps backend mutation errors visible inside the client-key dialog", async () => {
 		const user = userEvent.setup();
 		server.use(
 			http.post("/api/api-keys/", () => {
@@ -133,11 +127,11 @@ describe("apis page integration", () => {
 		renderWithProviders(<App />);
 
 		await user.click(await screen.findByRole("button", { name: "Create API Key" }));
-		const createDialog = await screen.findByRole("dialog", { name: "Create API key" });
+		const createDialog = await screen.findByRole("dialog", { name: "Create client key" });
 		await user.type(within(createDialog).getByLabelText("Name"), "Broken create");
-		await user.click(within(createDialog).getByRole("button", { name: "Create" }));
+		await user.click(within(createDialog).getByRole("button", { name: "Save client key" }));
 
-		expect(await screen.findByText("Invalid create payload")).toBeInTheDocument();
+		expect(await within(createDialog).findByText("Invalid create payload")).toBeInTheDocument();
 	});
 
 	it("renders the empty detail state when the API list is empty", async () => {
@@ -204,6 +198,7 @@ describe("apis page integration", () => {
 		expect(await within(apiKeyInfo).findByText(/12K tok/)).toBeInTheDocument();
 		expect(await within(apiKeyInfo).findByText(/3K cached/)).toBeInTheDocument();
 		expect(await within(apiKeyInfo).findByText(/42 req/)).toBeInTheDocument();
-		expect(await within(apiKeyInfo).findByText(/\$0.42/)).toBeInTheDocument();
+		expect(within(apiKeyInfo).queryByText(/\$0.42/)).not.toBeInTheDocument();
+		expect(within(apiKeyInfo).getByText("—")).toBeInTheDocument();
 	});
 });

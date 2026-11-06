@@ -9,7 +9,10 @@ import type {
   ThreadIdentityFacet,
   ThreadIdentityResponse,
 } from "@/features/reports/schemas";
-import { listAccounts } from "@/features/accounts/api";
+import { useAuthStore } from "@/features/auth/hooks/use-auth";
+import { ADMIN_PERMISSIONS } from "@/test/mocks/factories";
+import { server } from "@/test/mocks/server";
+import { http, HttpResponse } from "msw";
 import { getRequestLogOptions } from "@/features/dashboard/api";
 import { getBrowserReportsTimeZone } from "@/features/reports/date";
 import {
@@ -22,10 +25,6 @@ import {
   REPORT_CHART_VISIBILITY_STORAGE_KEY,
 } from "@/features/reports/hooks/use-report-chart-visibility";
 import { ReportsPage } from "./reports-page";
-
-vi.mock("@/features/accounts/api", () => ({
-  listAccounts: vi.fn().mockResolvedValue({ accounts: [] }),
-}));
 
 vi.mock("@/features/dashboard/api", () => ({
   getRequestLogOptions: vi.fn().mockResolvedValue({ accountIds: [], apiKeys: [], modelOptions: [], statuses: [] }),
@@ -104,11 +103,10 @@ const EMPTY_THREAD_IDENTITY_FACET: ThreadIdentityFacet = {
 const useReportsOptionsMock = vi.mocked(useReportsOptions);
 const useReportsMock = vi.mocked(useReports);
 const useThreadIdentityMock = vi.mocked(useThreadIdentity);
-const listAccountsMock = vi.mocked(listAccounts);
 const getRequestLogOptionsMock = vi.mocked(getRequestLogOptions);
 const getBrowserReportsTimeZoneMock = vi.mocked(getBrowserReportsTimeZone);
 type UseReportsMockResult = ReturnType<typeof useReports>;
-const REPORTS_TIMEZONE_STORAGE_KEY = "codex-lb-reports-timezone";
+const REPORTS_TIMEZONE_STORAGE_KEY = "swissai-lb-reports-timezone";
 // Derived so adding a card to REPORT_CHART_DEFINITIONS does not leave these
 // assertions checking a stale count.
 const ALL_CHARTS_BUTTON = `Charts (${REPORT_CHART_DEFINITIONS.length})`;
@@ -140,11 +138,10 @@ describe("ReportsPage", () => {
       refetch: vi.fn(),
     } as unknown as ReturnType<typeof useThreadIdentity>);
     useReportsOptionsMock.mockReturnValue({ data: { models: ["gpt-5.1", "gpt-5.2"], useragents: ["CLI", "SDK"] }, isLoading: false, refetch: vi.fn() } as unknown as ReturnType<typeof useReportsOptions>);
-    listAccountsMock.mockReset();
+    useAuthStore.setState({ initialized: true, authenticated: true, role: "admin", permissions: ADMIN_PERMISSIONS });
     getRequestLogOptionsMock.mockReset();
     getBrowserReportsTimeZoneMock.mockReset();
     window.localStorage.clear();
-    listAccountsMock.mockResolvedValue({ accounts: [] });
     getRequestLogOptionsMock.mockResolvedValue({ accountIds: [], apiKeys: [], modelOptions: [], statuses: [] });
     getBrowserReportsTimeZoneMock.mockReturnValue("America/Los_Angeles");
   });
@@ -611,9 +608,7 @@ describe("ReportsPage", () => {
     renderWithProviders(<ReportsPage />);
 
     expect(
-      await screen.findByText("Cost by Day", {
-        selector: "div.text-sm.font-semibold.text-foreground",
-      }),
+      await screen.findByRole("heading", { name: "SwissAI cost —" }),
     ).toBeInTheDocument();
     expect(screen.queryByText("Tokens by Day")).not.toBeInTheDocument();
     expect(screen.queryByText("Time to First Token")).not.toBeInTheDocument();
@@ -641,7 +636,7 @@ describe("ReportsPage", () => {
     renderWithProviders(<ReportsPage />);
 
     for (const heading of [
-      "Cost by Day",
+      "SwissAI cost —",
       "Tokens by Day",
       "Time to First Token",
       "Tokens per Second",
@@ -651,30 +646,16 @@ describe("ReportsPage", () => {
     }
   });
 
-  it("only queries thread identity while its card is visible", async () => {
+  it("does not request or offer account-only thread analytics for SwissAI", async () => {
     const user = userEvent.setup();
-    useReportsMock.mockReturnValue(
-      asUseReportsResult({
-        data: EMPTY_REPORT,
-        isLoading: false,
-        isError: false,
-        refetch: vi.fn(),
-      }),
-    );
-
+    useReportsMock.mockReturnValue(asUseReportsResult({
+      data: EMPTY_REPORT, isLoading: false, isError: false, refetch: vi.fn(),
+    }));
     renderWithProviders(<ReportsPage />);
-
-    expect(await screen.findByTestId("thread-identity-card")).toBeInTheDocument();
-    expect(useThreadIdentityMock.mock.calls.at(-1)?.[2]).toBe(true);
-
     await user.click(screen.getByRole("button", { name: ALL_CHARTS_BUTTON }));
-    await user.click(
-      screen.getByRole("menuitemcheckbox", { name: "Thread Identity & Cache Locality" }),
-    );
-    await user.keyboard("{Escape}");
-
+    expect(screen.queryByRole("menuitemcheckbox", { name: "Thread Identity & Cache Locality" })).not.toBeInTheDocument();
     expect(screen.queryByTestId("thread-identity-card")).not.toBeInTheDocument();
-    expect(useThreadIdentityMock.mock.calls.at(-1)?.[2]).toBe(false);
+    expect(useThreadIdentityMock).not.toHaveBeenCalled();
   });
 
   it("renders the selected Cost by Day and Queue Wait charts", async () => {
@@ -693,7 +674,7 @@ describe("ReportsPage", () => {
 
     renderWithProviders(<ReportsPage />);
 
-    expect(await screen.findByText("Cost by Day")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "SwissAI cost —" })).toBeInTheDocument();
     expect(await screen.findByText("Queue Wait")).toBeInTheDocument();
     expect(screen.queryByText("Tokens by Day")).not.toBeInTheDocument();
     expect(screen.queryByText("Time to First Token")).not.toBeInTheDocument();
@@ -719,7 +700,7 @@ describe("ReportsPage", () => {
     }
     await user.keyboard("{Escape}");
 
-    expect(screen.queryByText("Cost by Day")).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "SwissAI cost —" })).not.toBeInTheDocument();
     expect(screen.queryByText("Tokens by Day")).not.toBeInTheDocument();
     expect(screen.queryByText("Time to First Token")).not.toBeInTheDocument();
     expect(screen.queryByText("Tokens per Second")).not.toBeInTheDocument();
@@ -748,7 +729,7 @@ describe("ReportsPage", () => {
       <ReportsPage initialFilters={{ model: "gpt-5.1", useragent: "CLI" }} />,
     );
 
-    await screen.findByText("Cost by Day");
+    await screen.findByRole("heading", { name: "SwissAI cost —" });
     const callCountBeforeToggle = useReportsMock.mock.calls.length;
     const callsBeforeToggle = useReportsMock.mock.calls.slice(-1).map(
       ([filters, timeZone]) => [filters, timeZone],
@@ -762,9 +743,7 @@ describe("ReportsPage", () => {
     expect(useReportsMock.mock.calls.slice(-1)).toEqual(callsBeforeToggle);
   });
 
-  it("keeps the model and user-agent metric toggles independent", async () => {
-    const user = userEvent.setup();
-
+  it("shows request counts rather than unknown costs in both distributions", async () => {
     useReportsMock.mockImplementation(() =>
       asUseReportsResult({
         data: {
@@ -790,19 +769,36 @@ describe("ReportsPage", () => {
     expect(modelCard).not.toBeNull();
     expect(useragentCard).not.toBeNull();
 
-    await user.click(within(useragentCard as HTMLElement).getByRole("button", { name: /^req$/i }));
-
-    expect(within(modelCard as HTMLElement).getByRole("button", { name: /^cost$/i })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
-    expect(within(useragentCard as HTMLElement).getByRole("button", { name: /^req$/i })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
+    expect(within(modelCard as HTMLElement).getByTestId("model-distribution-center-value")).toHaveTextContent("3");
+    expect(within(useragentCard as HTMLElement).getByTestId("useragent-distribution-center-value")).toHaveTextContent("2");
+    expect(within(modelCard as HTMLElement).queryByText(/\$/)).not.toBeInTheDocument();
+    expect(within(useragentCard as HTMLElement).queryByText(/\$/)).not.toBeInTheDocument();
   });
 
-  it("shows account option load failures with a retry button and recovers when retried", async () => {
+  it("filters by SwissAI keys and retains historical source labels without querying retired accounts", async () => {
+    const user = userEvent.setup();
+    let retiredReads = 0;
+    server.use(
+      http.get("/api/accounts", () => { retiredReads++; return HttpResponse.json({ accounts: [] }); }),
+      http.get("/api/swissai-keys", () => HttpResponse.json([{
+        id: "sak_research", name: "Research A", keyPrefix: "sk-rc-…0000", status: "active", enabled: true,
+        cooldownUntil: null, failureReason: null, maxConcurrency: 4, inFlight: 0,
+        lastSuccessAt: null, lastFailureAt: null, createdAt: "2026-10-28T00:00:00Z",
+      }])),
+    );
+    useReportsMock.mockReturnValue(asUseReportsResult({
+      data: { ...EMPTY_REPORT, byAccount: [{ accountId: "sak_deleted", alias: "Historical key", costUsd: 0, requests: 1 }] },
+      isLoading: false, isError: false, refetch: vi.fn(),
+    }));
+    renderWithProviders(<ReportsPage />);
+    await user.click(screen.getByRole("button", { name: "SwissAI keys", expanded: false }));
+    expect(await screen.findByRole("menuitemcheckbox", { name: "Historical key" })).toBeInTheDocument();
+    await user.click(await screen.findByRole("menuitemcheckbox", { name: "Research A" }));
+    await waitFor(() => expect(useReportsMock.mock.lastCall?.[0].accountId).toEqual(["sak_research"]));
+    expect(retiredReads).toBe(0);
+  });
+
+  it("shows SwissAI key option load failures and recovers independently when retried", async () => {
     const user = userEvent.setup();
     useReportsMock.mockImplementation(() =>
       asUseReportsResult({
@@ -812,19 +808,23 @@ describe("ReportsPage", () => {
         refetch: vi.fn(),
       }),
     );
-    listAccountsMock
-      .mockRejectedValueOnce(new Error("accounts backend timeout"))
-      .mockResolvedValueOnce({ accounts: [] });
+    let inventoryCalls = 0;
+    server.use(http.get("/api/swissai-keys", () => {
+      inventoryCalls++;
+      return inventoryCalls === 1
+        ? HttpResponse.json({ error: { code: "timeout", message: "keys backend timeout" } }, { status: 503 })
+        : HttpResponse.json([]);
+    }));
 
     renderWithProviders(<ReportsPage />);
 
     const accountErrorText = await screen.findByText(
-      /Failed to load account options: accounts backend timeout/i,
+      /Failed to load SwissAI key options: keys backend timeout/i,
     );
     expect(accountErrorText).toBeInTheDocument();
     expect(
       screen
-        .getAllByRole("button", { name: /accounts/i })
+        .getAllByRole("button", { name: /SwissAI keys/i })
         .find((button) => button.getAttribute("aria-haspopup") === "menu"),
     ).toBeInTheDocument();
 
@@ -832,10 +832,10 @@ describe("ReportsPage", () => {
     const retryButton = within(accountErrorContainer).getByRole("button", { name: /retry/i });
     await user.click(retryButton);
 
-    expect(listAccountsMock).toHaveBeenCalledTimes(2);
+    expect(inventoryCalls).toBe(2);
     await waitFor(() => {
       expect(
-        screen.queryByText(/Failed to load account options:/i),
+        screen.queryByText(/Failed to load SwissAI key options:/i),
       ).not.toBeInTheDocument();
     });
   });
@@ -986,7 +986,7 @@ describe("ReportsPage", () => {
 
     expect(createObjectURL).toHaveBeenCalledOnce();
     const csvContent = await blobText();
-    expect(csvContent).toContain("2030-01-15,42,2,1000,200,0,50,0.1500,1,0,0");
+    expect(csvContent).toContain("2030-01-15,42,2,1000,200,0,50,,1,0,0");
   });
 });
 

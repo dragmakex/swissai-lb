@@ -1,17 +1,6 @@
 # syntax=docker/dockerfile:1.7
 FROM ghcr.io/astral-sh/uv:0.13.1 AS uv-bin
 
-FROM rust:1.99.0-slim-bookworm AS native-egress-build
-
-WORKDIR /src
-
-COPY Cargo.toml Cargo.lock ./
-COPY crates ./crates
-RUN --mount=type=cache,target=/usr/local/cargo/registry \
-    --mount=type=cache,target=/src/target \
-    cargo build --release --locked --package codex-lb-egress-worker --bin codex-lb-native-egress \
-    && cp target/release/codex-lb-native-egress /tmp/codex-lb-native-egress
-
 FROM oven/bun:1.4.3-alpine AS frontend-build
 
 WORKDIR /app/frontend
@@ -45,6 +34,7 @@ FROM python:3.14-slim AS runtime
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
+    SWISSAI_LB_DATA_DIR=/var/lib/swissai-lb \
     PATH="/opt/venv/bin:$PATH"
 
 WORKDIR /app
@@ -65,11 +55,10 @@ RUN python -m pip uninstall -y pip setuptools wheel || true \
         /usr/local/lib/python*/site-packages/wheel*
 
 RUN adduser --disabled-password --gecos "" app \
-    && mkdir -p /var/lib/codex-lb \
-    && chown -R app:app /var/lib/codex-lb
+    && mkdir -p /var/lib/swissai-lb \
+    && chown -R app:app /var/lib/swissai-lb
 
 COPY --from=python-build /opt/venv /opt/venv
-COPY --from=native-egress-build /tmp/codex-lb-native-egress /usr/local/bin/codex-lb-native-egress
 COPY --chown=app:app app app
 COPY --chown=app:app config config
 COPY --chown=app:app scripts scripts
@@ -78,12 +67,11 @@ COPY --chown=app:app --from=frontend-build /app/app/static app/static
 # The runtime image copies source files instead of installing the project, so
 # recreate the console-script entry point that pyproject would normally install.
 RUN chmod +x /app/scripts/docker-entrypoint.sh \
-    && chmod +x /usr/local/bin/codex-lb-native-egress \
-    && printf '%s\n' '#!/bin/sh' 'exec python -m app.cli "$@"' > /usr/local/bin/codex-lb \
-    && chmod +x /usr/local/bin/codex-lb
+    && printf '%s\n' '#!/bin/sh' 'exec python -m app.cli "$@"' > /usr/local/bin/swissai-lb \
+    && chmod +x /usr/local/bin/swissai-lb
 
 USER app
 RUN test -z "$(find /app/app /app/config /app/scripts -type f ! -readable -print -quit)"
-EXPOSE 2455 1455
+EXPOSE 2455
 
 CMD ["/app/scripts/docker-entrypoint.sh"]

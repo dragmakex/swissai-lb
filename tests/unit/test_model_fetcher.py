@@ -8,7 +8,6 @@ from typing import Any, cast
 import pytest
 
 from app.core.clients.model_fetcher import ModelFetchError, fetch_models_for_plan
-from app.core.clients.native_egress import NativeEgressUnavailable
 from app.core.upstream_proxy import ResolvedProxyEndpoint, ResolvedUpstreamRoute
 
 pytestmark = pytest.mark.unit
@@ -85,18 +84,6 @@ class _NativeModelResponse:
     async def json(self, *, content_type: str | None = None) -> object:
         del content_type
         return _CodexResponse().json()
-
-
-class _NativeModelClient:
-    def __init__(self, *, unavailable: bool = False) -> None:
-        self.unavailable = unavailable
-        self.calls: list[object] = []
-
-    async def request(self, request: object) -> object:
-        self.calls.append(request)
-        if self.unavailable:
-            raise NativeEgressUnavailable("helper disappeared")
-        return _NativeModelResponse()
 
 
 async def test_fetch_models_for_plan_maps_read_timeout_to_model_fetch_error(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -200,36 +187,7 @@ async def test_fetch_models_for_plan_direct_uses_codex_control_identity(monkeypa
     assert session.calls[0]["skip_auto_headers"] == {"Accept-Encoding"}
 
 
-async def test_fetch_models_for_plan_direct_prefers_native_egress(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(
-        "app.core.clients.model_fetcher.get_settings",
-        lambda: SimpleNamespace(upstream_base_url="https://upstream.example/backend-api"),
-    )
-    monkeypatch.setattr("app.core.clients.model_fetcher.get_codex_version_cache", lambda: _VersionCache())
-
-    @contextlib.asynccontextmanager
-    async def unexpected_python_session():
-        raise AssertionError("aiohttp must not run after native selection")
-        yield
-
-    monkeypatch.setattr("app.core.clients.model_fetcher.lease_http_session", unexpected_python_session)
-    client = _NativeModelClient()
-
-    models = await fetch_models_for_plan(
-        "access-token",
-        "account-id",
-        allow_direct_egress=True,
-        native_egress_client=cast(Any, client),
-    )
-
-    assert [model.slug for model in models] == ["gpt-5.2"]
-    assert len(client.calls) == 1
-    request = client.calls[0]
-    assert getattr(request, "method") == "GET"
-    assert getattr(request, "headers")["originator"] == "codex_cli_rs"
-
-
-async def test_fetch_models_for_plan_falls_back_only_when_native_is_unavailable(
+async def test_fetch_models_for_plan_direct_http_uses_python(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
@@ -250,7 +208,6 @@ async def test_fetch_models_for_plan_falls_back_only_when_native_is_unavailable(
             "access-token",
             "account-id",
             allow_direct_egress=True,
-            native_egress_client=cast(Any, _NativeModelClient(unavailable=True)),
         )
 
     assert len(session.calls) == 1

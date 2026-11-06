@@ -514,7 +514,7 @@ class ApiKeysService:
             allowed_reasoning_efforts=_serialize_allowed_reasoning_efforts(allowed_reasoning_efforts),
             enforced_service_tier=enforced_service_tier,
             account_assignment_scope_enabled=bool(assigned_account_ids),
-            source_assignment_scope_enabled=bool(assigned_source_ids),
+            source_assignment_scope_enabled=payload.assigned_source_ids is not None,
             traffic_class=traffic_class,
             transport_policy_override=transport_policy_override,
             thread_cache_identity_override=thread_cache_identity_override,
@@ -624,7 +624,7 @@ class ApiKeysService:
             account_assignment_scope_enabled = _UNSET
         if payload.assigned_source_ids_set:
             assigned_source_ids = await self._resolve_assigned_source_ids(payload.assigned_source_ids)
-            source_assignment_scope_enabled: bool | _Unset = bool(assigned_source_ids)
+            source_assignment_scope_enabled: bool | _Unset = payload.assigned_source_ids is not None
         else:
             assigned_source_ids = None
             source_assignment_scope_enabled = _UNSET
@@ -1438,7 +1438,7 @@ def _get_usage_sections_with_default(row: ApiKey) -> str:
 
 
 def _generate_plain_key() -> str:
-    return f"sk-clb-{secrets.token_hex(24)}"
+    return f"sk-sailb-{secrets.token_hex(24)}"
 
 
 def _hash_key(plain_key: str) -> str:

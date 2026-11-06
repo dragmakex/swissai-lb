@@ -505,7 +505,6 @@ async def loopback(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[list[_Wire]
                 return lease_http_session(existing or session)
 
             monkeypatch.setattr(proxy_module, "lease_http_session", local_lease)
-            monkeypatch.setattr(proxy_module, "discover_native_egress_client", lambda: None)
             monkeypatch.setattr(get_settings(), "upstream_base_url", str(server.make_url("/backend-api")))
             yield received
     finally:
@@ -709,7 +708,6 @@ def websocket_capture(monkeypatch: pytest.MonkeyPatch) -> tuple[list[Any], list[
         return manager, cast(Any, websocket)
 
     monkeypatch.setattr(proxy_module, "_open_upstream_websocket", fake_open)
-    monkeypatch.setattr(proxy_module, "discover_native_egress_client", lambda: None)
     return frames, headers_seen
 
 

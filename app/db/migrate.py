@@ -19,9 +19,10 @@ from alembic.script import ScriptDirectory
 from alembic.script.revision import RevisionError
 from alembic.util.exc import CommandError
 from anyio import to_thread
-from sqlalchemy import create_engine, inspect, text
+from sqlalchemy import Column, create_engine, inspect, text
 from sqlalchemy import exc as sa_exc
 from sqlalchemy.engine import Connection
+from sqlalchemy.schema import SchemaItem
 
 from app.core.config.settings import get_settings
 from app.db.alembic.revision_ids import LEGACY_MIGRATION_TO_NEW_REVISION, OLD_TO_NEW_REVISION_MAP, REVISION_ID_PATTERN
@@ -642,6 +643,14 @@ def _stable_diff_repr(diff: object) -> str:
     return _OBJECT_ADDRESS_RE.sub(" object>", repr(diff))
 
 
+def _include_schema_object(
+    obj: SchemaItem, name: str, kind: str, reflected: bool, compare_to: SchemaItem | None
+) -> bool:
+    if reflected and kind == "column" and isinstance(obj, Column):
+        return (obj.table.name, name) not in _LEGACY_EXTRA_COLUMNS
+    return True
+
+
 def check_schema_drift(database_url: str) -> tuple[str, ...]:
     config = _build_alembic_config(database_url)
     sync_database_url = _required_sqlalchemy_url(config)
@@ -653,6 +662,7 @@ def check_schema_drift(database_url: str) -> tuple[str, ...]:
                 "target_metadata": Base.metadata,
                 "compare_type": True,
                 "compare_server_default": True,
+                "include_object": _include_schema_object,
             },
         )
         with warnings.catch_warnings():
@@ -1118,7 +1128,7 @@ def _parse_args() -> argparse.Namespace:
         "--db-url",
         type=_non_empty_database_url,
         default=None,
-        help="Database URL to migrate. Defaults to CODEX_LB_DATABASE_URL from settings.",
+        help="Database URL to migrate. Defaults to SWISSAI_LB_DATABASE_URL from settings.",
     )
 
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -1185,6 +1195,9 @@ def main() -> None:
     database_url = get_settings().database_url if args.db_url is None else args.db_url
 
     if args.command == "upgrade":
+        from app.modules.swissai.runtime import verify_target_database
+
+        verify_target_database(database_url)
         result = run_upgrade(
             database_url,
             args.revision,

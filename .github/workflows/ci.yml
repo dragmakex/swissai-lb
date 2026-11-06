@@ -3,17 +3,11 @@ name: CI
 on:
   push:
     branches: ["main"]
-  # No `edited`: a PR title/body edit (agents finalizing descriptions, review
-  # bots rewriting summaries) must not cancel the in-flight matrix and re-queue
-  # ~30 jobs for an unchanged head. The only jobs that read PR metadata are the
-  # release guards; they live in release-guards.yml, which does handle `edited`.
-  # Do NOT bring `edited` back here with `if: github.event.action != 'edited'`
-  # on the heavy jobs: skipped check runs still satisfy branch protection, so a
-  # body-only edit could mint a passing check for a red or untested head. Not
-  # triggering at all leaves the head's existing check runs authoritative.
+  # Metadata-only edits must not cancel or mint passing checks for an unchanged head.
   pull_request:
     types: [opened, reopened, synchronize, ready_for_review]
   merge_group:
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -35,11 +29,8 @@ jobs:
     outputs:
       frontend: ${{ steps.force.outputs.full_suite || steps.filter.outputs.frontend }}
       backend: ${{ steps.force.outputs.full_suite || steps.filter.outputs.backend }}
-      rust: ${{ steps.force.outputs.full_suite || steps.filter.outputs.rust }}
-      helm: ${{ steps.force.outputs.full_suite || steps.filter.outputs.helm }}
       docker: ${{ steps.force.outputs.full_suite || steps.filter.outputs.docker }}
       migrations: ${{ steps.force.outputs.full_suite || steps.filter.outputs.migrations }}
-      nix: ${{ steps.force.outputs.full_suite || steps.filter.outputs.nix }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -49,7 +40,7 @@ jobs:
       - name: Detect full-suite events
         id: force
         run: |
-          if [[ "${{ github.event_name }}" == "push" || "${{ github.event_name }}" == "merge_group" ]]; then
+          if [[ "${{ github.event_name }}" == "push" || "${{ github.event_name }}" == "merge_group" || "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             echo "full_suite=true" >> "$GITHUB_OUTPUT"
           else
             echo "full_suite=" >> "$GITHUB_OUTPUT"
@@ -61,22 +52,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: python3 .github/scripts/detect_changed_areas.py
-
-  contributors:
-    name: Contributors attribution
-    runs-on: ubuntu-24.04
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-
-      - name: Check all-contributors coverage
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: python .github/scripts/check_all_contributors.py
 
   openspec:
     name: OpenSpec validation
@@ -318,57 +293,6 @@ jobs:
       - name: Ty check
         run: make typecheck
 
-  rust:
-    name: Rust workspace
-    runs-on: ubuntu-24.04
-    needs: changes
-    if: needs.changes.outputs.rust == 'true'
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          persist-credentials: false
-
-      - name: Install pinned Rust toolchain
-        run: rustup toolchain install 1.96.0 --profile minimal --component clippy,rustfmt
-
-      - name: Set up uv
-        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884
-        with:
-          python-version: "3.13"
-          enable-cache: true
-          prune-cache: true
-
-      - name: Cache Cargo downloads
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
-        with:
-          path: |
-            ~/.cargo/registry/index
-            ~/.cargo/registry/cache
-            ~/.cargo/git/db
-          key: cargo-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
-          restore-keys: |
-            cargo-${{ runner.os }}-${{ runner.arch }}-
-
-      - name: Check formatting, lints, tests, and release build
-        run: make rust-check
-
-      - name: Run native routed and SSE wire probes
-        env:
-          CODEX_LB_NATIVE_EGRESS_TEST_BINARY: ${{ github.workspace }}/target/debug/codex-lb-native-egress
-        run: |
-          uv sync --dev --frozen
-          cargo build --locked -p codex-lb-egress-worker --bin codex-lb-native-egress
-          uv run pytest -q -ra tests/integration/test_native_routed_egress.py tests/integration/test_native_sse_egress.py tests/integration/test_native_websocket_events.py tests/integration/test_native_usage_egress.py
-
-      - name: Audit Rust dependencies and licenses
-        uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25
-        with:
-          rust-version: "1.96.0"
-          command: check
-          arguments: --all-features
-
   test:
     name: Tests (pytest, ${{ matrix.slice.name }})
     runs-on: ubuntu-24.04
@@ -534,7 +458,7 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     env:
-      CODEX_LB_TEST_DATABASE_URL: postgresql+asyncpg://codex_lb:codex_lb@127.0.0.1:5432/codex_lb
+      SWISSAI_LB_TEST_DATABASE_URL: postgresql+asyncpg://codex_lb:codex_lb@127.0.0.1:5432/codex_lb
       PYTHONFAULTHANDLER: "1"
 
     steps:
@@ -682,7 +606,7 @@ jobs:
       contents: read
       security-events: write
     env:
-      DOCKER_CACHE_SCOPE: ${{ github.event_name == 'pull_request' && format('codex-lb-pr-{0}', github.event.pull_request.number) || 'codex-lb-main' }}
+      DOCKER_CACHE_SCOPE: ${{ github.event_name == 'pull_request' && format('swissai-lb-pr-{0}', github.event.pull_request.number) || 'swissai-lb-main' }}
 
     steps:
       - name: Checkout repository
@@ -700,14 +624,14 @@ jobs:
           file: Dockerfile
           push: false
           load: true
-          tags: codex-lb:ci
+          tags: swissai-lb:ci
           cache-from: type=gha,scope=${{ env.DOCKER_CACHE_SCOPE }}
           cache-to: type=gha,mode=max,scope=${{ env.DOCKER_CACHE_SCOPE }}
 
       - name: Scan Docker image with Trivy (SARIF)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
         with:
-          image-ref: codex-lb:ci
+          image-ref: swissai-lb:ci
           format: sarif
           output: trivy-results.sarif
           severity: CRITICAL,HIGH,MEDIUM,LOW
@@ -725,156 +649,11 @@ jobs:
       - name: Enforce Trivy high-severity gate
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
         with:
-          image-ref: codex-lb:ci
+          image-ref: swissai-lb:ci
           format: table
           exit-code: 1
           severity: CRITICAL,HIGH
           ignore-unfixed: true
-
-  helm-lint:
-    name: Helm lint + template + kubeconform
-    runs-on: ubuntu-24.04
-    needs: changes
-    if: needs.changes.outputs.helm == 'true'
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          persist-credentials: false
-
-      - name: Set up Helm
-        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310
-
-      - name: Cache kubeconform
-        id: cache-kubeconform
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
-        with:
-          path: .cache/ci-tools/kubeconform
-          key: kubeconform-0.7.0-${{ runner.os }}-${{ runner.arch }}
-
-      - name: Install kubeconform
-        run: |
-          set -euo pipefail
-          KUBECONFORM_VERSION="0.7.0"
-          TOOL_DIR=".cache/ci-tools/kubeconform"
-          TOOL_PATH="${TOOL_DIR}/kubeconform"
-          if [[ ! -x "${TOOL_PATH}" ]]; then
-            mkdir -p "${TOOL_DIR}"
-            OS=$(uname -s | tr '[:upper:]' '[:lower:]')
-            ARCH=$(uname -m)
-            case "$ARCH" in
-              x86_64) ARCH="amd64" ;;
-              aarch64) ARCH="arm64" ;;
-            esac
-            ASSET="kubeconform-${OS}-${ARCH}.tar.gz"
-            BASE_URL="https://github.com/yannh/kubeconform/releases/download/v${KUBECONFORM_VERSION}"
-            curl -fsSLO "${BASE_URL}/CHECKSUMS"
-            curl -fsSLO "${BASE_URL}/${ASSET}"
-            grep "  ${ASSET}$" CHECKSUMS | sha256sum -c -
-            tar xzf "${ASSET}" -C "${TOOL_DIR}" kubeconform
-          fi
-          sudo install -m 0755 "${TOOL_PATH}" /usr/local/bin/kubeconform
-
-      - name: Helm lint + template + kubeconform
-        run: make helm-check
-
-  helm-smoke-kind:
-    name: Helm smoke install (kind)
-    runs-on: ubuntu-24.04
-    needs: changes
-    if: needs.changes.outputs.helm == 'true'
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          persist-credentials: false
-
-      - name: Set up Helm
-        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310
-
-      - name: Cache kind
-        id: cache-kind
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
-        with:
-          path: .cache/ci-tools/kind
-          key: kind-0.30.0-${{ runner.os }}-${{ runner.arch }}
-
-      - name: Install kind
-        run: |
-          set -euo pipefail
-          KIND_VERSION="0.30.0"
-          TOOL_DIR=".cache/ci-tools/kind"
-          TOOL_PATH="${TOOL_DIR}/kind"
-          if [[ ! -x "${TOOL_PATH}" ]]; then
-            mkdir -p "${TOOL_DIR}"
-            ARCH=$(uname -m)
-            case "$ARCH" in
-              x86_64) KIND_ARCH="amd64" ;;
-              aarch64) KIND_ARCH="arm64" ;;
-              *) echo "unsupported arch: ${ARCH}"; exit 1 ;;
-            esac
-            BASE_URL="https://github.com/kubernetes-sigs/kind/releases/download/v${KIND_VERSION}"
-            ASSET="kind-linux-${KIND_ARCH}"
-            curl -fsSLo "${TOOL_DIR}/${ASSET}" "${BASE_URL}/${ASSET}"
-            curl -fsSLo "${TOOL_DIR}/${ASSET}.sha256sum" "${BASE_URL}/${ASSET}.sha256sum"
-            (cd "${TOOL_DIR}" && sha256sum -c "${ASSET}.sha256sum")
-            mv "${TOOL_DIR}/${ASSET}" "${TOOL_PATH}"
-            chmod +x "${TOOL_PATH}"
-          fi
-          sudo install -m 0755 "${TOOL_PATH}" /usr/local/bin/kind
-
-      - name: Helm smoke install
-        run: make helm-smoke-kind
-
-  # Bitrot guard for the Nix packaging: no other job evaluates or builds the
-  # flake, so exercise it whenever the files it locks against change. The job
-  # is path-gated like the other conditional jobs; a skipped run satisfies
-  # "CI Required", so PRs that do not touch Nix inputs are never blocked.
-  nix-flake:
-    name: Nix flake check
-    runs-on: ubuntu-24.04
-    timeout-minutes: 45
-    needs: changes
-    if: needs.changes.outputs.nix == 'true'
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          persist-credentials: false
-
-      - name: Set up Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
-        with:
-          bun-version: "1.3.14"
-
-      - name: Cache Bun dependencies
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
-        with:
-          path: |
-            ~/.bun/install/cache
-            frontend/node_modules
-          key: bun-1.3.14-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('frontend/bun.lock') }}
-          restore-keys: |
-            bun-1.3.14-${{ runner.os }}-${{ runner.arch }}-
-
-      - name: Verify bun.nix is generated from bun.lock
-        run: |
-          cd frontend
-          bun install --frozen-lockfile
-          bun run generate:bun-nix
-          if ! git diff --exit-code -- bun.nix; then
-            echo "::error file=frontend/bun.nix::frontend/bun.nix is stale; run 'cd frontend && bun run generate:bun-nix' and commit the result." >&2
-            exit 1
-          fi
-
-      - name: Install Nix
-        uses: DeterminateSystems/nix-installer-action@3138316df39ed29be04236d7ffc686fa525866aa
-
-      - name: Build and check the flake
-        run: nix flake check --print-build-logs
 
   ci-required:
     name: CI Required
@@ -882,7 +661,6 @@ jobs:
     if: always()
     needs:
       - changes
-      - contributors
       - openspec
       - frontend-lint
       - frontend-typecheck
@@ -891,7 +669,6 @@ jobs:
       - dashboard-browser-smoke
       - lint
       - typecheck
-      - rust
       - test
       - test-integration-core
       - test-integration-core-required
@@ -900,9 +677,6 @@ jobs:
       - migration-check-postgres
       - package
       - docker
-      - helm-lint
-      - helm-smoke-kind
-      - nix-flake
 
     steps:
       - name: Require every CI job to pass

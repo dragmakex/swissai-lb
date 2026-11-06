@@ -14,10 +14,10 @@ import pytest
 
 pytestmark = pytest.mark.e2e
 
-_RUN_E2E = os.environ.get("CODEX_LB_RUN_CODEX_PROFILE_E2E") == "1"
+_RUN_E2E = os.environ.get("SWISSAI_LB_RUN_CODEX_PROFILE_E2E") == "1"
 _ROOT = Path(__file__).resolve().parents[2]
-_BASE_CONFIG = _ROOT / "docs/examples/codex/config.toml"
-_PROFILE = _ROOT / "docs/examples/codex/daybreak-blue.config.toml"
+_BASE_CONFIG = _ROOT / "tests/fixtures/codex/config.toml"
+_PROFILE = _ROOT / "tests/fixtures/codex/daybreak-blue.config.toml"
 _API_KEY = "inert-daybreak-profile-key"
 _CapturedRequest = tuple[str, str, dict[str, str]]
 
@@ -91,7 +91,7 @@ def _run_codex(
         "USER": "codex-profile-e2e",
     }
     if include_key:
-        env["CODEX_LB_API_KEY"] = _API_KEY
+        env["SWISSAI_LB_API_KEY"] = _API_KEY
     policy = f'(version 1)(allow default)(deny network-outbound)(allow network-outbound (remote ip "localhost:{port}"))'
     command = [
         sandbox_exec,
@@ -112,7 +112,7 @@ def _run_codex(
     return subprocess.run(command, cwd=root, env=env, capture_output=True, text=True, timeout=45, check=False)
 
 
-@pytest.mark.skipif(not _RUN_E2E, reason="set CODEX_LB_RUN_CODEX_PROFILE_E2E=1 for the installed-Codex proof")
+@pytest.mark.skipif(not _RUN_E2E, reason="set SWISSAI_LB_RUN_CODEX_PROFILE_E2E=1 for the installed-Codex proof")
 def test_installed_codex_daybreak_profile_emits_authenticated_capability_before_fallback(tmp_path: Path) -> None:
     if sys.platform != "darwin":
         pytest.skip("the network-deny harness requires macOS sandbox-exec")
@@ -142,7 +142,7 @@ def test_installed_codex_daybreak_profile_emits_authenticated_capability_before_
         missing = _run_codex(codex, sandbox_exec, tmp_path / "missing-key", port, include_key=False)
         output = missing.stdout + missing.stderr
         assert missing.returncode != 0
-        assert "Missing environment variable" in output and "CODEX_LB_API_KEY" in output
+        assert "Missing environment variable" in output and "SWISSAI_LB_API_KEY" in output
         assert server.requests == []
     finally:
         server.shutdown()

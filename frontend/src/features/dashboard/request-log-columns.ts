@@ -1,7 +1,7 @@
 export const REQUEST_LOG_COLUMN_OPTIONS = [
   { id: "time", translationKey: "dashboard.requests.columns.time" },
   { id: "account", translationKey: "dashboard.requests.columns.account" },
-  { id: "plan", translationKey: "dashboard.requests.columns.plan" },
+  { id: "route", translationKey: "dashboard.requests.columns.route" },
   { id: "apiKey", translationKey: "dashboard.requests.columns.apiKey" },
   { id: "model", translationKey: "dashboard.requests.columns.model" },
   { id: "transport", translationKey: "dashboard.requests.columns.transport" },
@@ -31,7 +31,7 @@ export type RequestLogColumnWidths = Partial<Record<RequestLogColumnId, number>>
 export const REQUEST_LOG_COLUMN_DEFAULT_WIDTHS: Record<RequestLogColumnId, number> = {
   time: 112,
   account: 160,
-  plan: 96,
+  route: 176,
   apiKey: 144,
   model: 180,
   transport: 128,

@@ -56,7 +56,7 @@ async def test_health_endpoint_ok(async_client):
 
 @pytest.mark.asyncio
 async def test_api_validation_error_returns_dashboard_payload(async_client):
-    response = await async_client.get("/api/usage/history?hours=0")
+    response = await async_client.get("/api/request-logs?limit=0")
     assert response.status_code == 422
     payload = response.json()
     assert payload["error"]["code"] == "validation_error"
@@ -80,10 +80,8 @@ async def test_api_not_found_returns_dashboard_payload(async_client):
     [
         pytest.param("/v1", id="v1-root"),
         pytest.param("/v1/", id="v1-trailing-slash"),
-        pytest.param("/v1/does-not-exist", id="v1-child"),
         pytest.param("/backend-api", id="backend-api-root"),
         pytest.param("/backend-api/", id="backend-api-trailing-slash"),
-        pytest.param("/backend-api/does-not-exist", id="backend-api-child"),
     ],
 )
 async def test_exact_openai_root_error_envelope_matches_equivalent_paths(async_client, path):
@@ -97,6 +95,14 @@ async def test_exact_openai_root_error_envelope_matches_equivalent_paths(async_c
             "code": "not_found",
         }
     }
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("path", ["/v1/does-not-exist", "/backend-api/does-not-exist"])
+async def test_unregistered_provider_capabilities_are_explicitly_unsupported(async_client, path):
+    response = await async_client.get(path)
+    assert response.status_code == 501
+    assert response.json()["error"]["code"] == "unsupported_upstream_capability"
 
 
 @pytest.mark.asyncio

@@ -237,7 +237,8 @@ def _configure_disabled_proxy_auth(
         auth_dependencies,
         "get_settings",
         lambda: SimpleNamespace(
-            proxy_unauthenticated_client_cidrs=[socket_allowlist_cidr] if socket_allowlist_cidr else []
+            proxy_unauthenticated_client_cidrs=[socket_allowlist_cidr] if socket_allowlist_cidr else [],
+            proxy_allow_anonymous_lan=False,
         ),
     )
     monkeypatch.setattr(

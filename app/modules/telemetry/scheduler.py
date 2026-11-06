@@ -64,8 +64,8 @@ class TelemetryScheduler:
                     consent = await store.resolve()
                     if log_undecided_notice and consent.state == "undecided" and consent.source == "default":
                         logger.info(
-                            "Anonymous telemetry is active; collected fields: %s; disable with "
-                            "CODEX_LB_TELEMETRY_ENABLED=false",
+                            "Anonymous telemetry awaits operator consent; preview collected fields at %s; "
+                            "enable through the dashboard or SWISSAI_LB_TELEMETRY_ENABLED=true",
                             TELEMETRY_FIELDS_DOCUMENTATION,
                         )
                     if not consent.active:

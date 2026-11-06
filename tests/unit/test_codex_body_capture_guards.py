@@ -109,6 +109,15 @@ def test_output_under_a_temporary_filesystem_is_refused() -> None:
         assert_output_outside_repo(Path("/tmp/codex-body-capture"))
 
 
+def test_temporary_root_alias_is_resolved_before_policy_comparison(tmp_path: Path) -> None:
+    target = tmp_path / "temporary-root"
+    target.mkdir()
+    alias = tmp_path / "root-alias"
+    alias.symlink_to(target)
+    with pytest.raises(CaptureRefusal, match="storage policy"):
+        assert_output_outside_repo(target / "capture", repo_root=tmp_path / "repo", forbidden_roots=(str(alias),))
+
+
 def test_a_symlinked_output_directory_is_refused(tmp_path: Path) -> None:
     """Resolving first would let the symlink target escape the repository check."""
 
@@ -353,7 +362,7 @@ def test_the_child_environment_drops_upstream_pointers_and_names_the_throwaway_h
         # Assembled rather than written as a literal, so a repository secret
         # scanner does not spend a review cycle on a fake.
         "OPENAI_API_KEY": "sk-" + "live-should-not-propagate",
-        "CODEX_LB_UPSTREAM_BASE_URL": "https://example.invalid",
+        "SWISSAI_LB_UPSTREAM_BASE_URL": "https://example.invalid",
         "CODEX_HOME": "/home/someone/.codex",
     }
 

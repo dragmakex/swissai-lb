@@ -26,7 +26,7 @@ async def test_consent_api_get_preview_and_put_persists_without_restart(
     monkeypatch,
     opt_out_sender,
 ) -> None:
-    monkeypatch.delenv("CODEX_LB_TELEMETRY_ENABLED", raising=False)
+    monkeypatch.delenv("SWISSAI_LB_TELEMETRY_ENABLED", raising=False)
     get_settings.cache_clear()
 
     response = await async_client.get("/api/settings/telemetry")
@@ -34,7 +34,7 @@ async def test_consent_api_get_preview_and_put_persists_without_restart(
     initial = response.json()
     assert initial["state"] == "undecided"
     assert initial["source"] == "default"
-    assert initial["active"] is True
+    assert initial["active"] is False
     assert set(initial["preview"]) == {"instance_id", "metrics", "timestamp"}
     assert initial["preview"]["metrics"]["schema_version"] == 1
     assert initial["preview"]["metrics"]["consent"] == "undecided"
@@ -48,7 +48,7 @@ async def test_consent_api_get_preview_and_put_persists_without_restart(
     assert disabled["active"] is False
     assert disabled["preview"] is None
     await asyncio.sleep(0)
-    opt_out_sender.send_opt_out.assert_awaited_once()
+    opt_out_sender.send_opt_out.assert_not_awaited()
 
     builder = Mock(side_effect=AssertionError("decided consent must not build a preview"))
     monkeypatch.setattr("app.modules.telemetry.api.TelemetrySnapshotBuilder", builder)
@@ -64,7 +64,7 @@ async def test_consent_api_builds_decided_preview_only_when_requested(
     async_client,
     monkeypatch,
 ) -> None:
-    monkeypatch.delenv("CODEX_LB_TELEMETRY_ENABLED", raising=False)
+    monkeypatch.delenv("SWISSAI_LB_TELEMETRY_ENABLED", raising=False)
     get_settings.cache_clear()
     await async_client.put("/api/settings/telemetry", json={"enabled": False})
 
@@ -79,7 +79,7 @@ async def test_consent_api_builds_decided_preview_only_when_requested(
 
 @pytest.mark.asyncio
 async def test_consent_api_env_override_wins_and_suppresses_undecided_state(async_client, monkeypatch) -> None:
-    monkeypatch.setenv("CODEX_LB_TELEMETRY_ENABLED", "true")
+    monkeypatch.setenv("SWISSAI_LB_TELEMETRY_ENABLED", "true")
     get_settings.cache_clear()
 
     builder = Mock(side_effect=AssertionError("environment override must not build a preview"))
@@ -101,7 +101,7 @@ async def test_dashboard_active_to_inactive_transitions_each_send_exactly_once(
     monkeypatch,
     opt_out_sender,
 ) -> None:
-    monkeypatch.delenv("CODEX_LB_TELEMETRY_ENABLED", raising=False)
+    monkeypatch.setenv("SWISSAI_LB_TELEMETRY_ENABLED", "true")
     get_settings.cache_clear()
 
     first = await async_client.put("/api/settings/telemetry", json={"enabled": False})
@@ -145,7 +145,7 @@ async def test_persisted_dashboard_decision_wins_over_environment(
     expected_state: str,
     expected_opt_outs: int,
 ) -> None:
-    monkeypatch.setenv("CODEX_LB_TELEMETRY_ENABLED", env_value)
+    monkeypatch.setenv("SWISSAI_LB_TELEMETRY_ENABLED", env_value)
     get_settings.cache_clear()
 
     # While undecided the environment decides and is reported as the source.
@@ -178,7 +178,7 @@ async def test_opt_out_background_send_does_not_block_settings_response(
     monkeypatch,
     opt_out_sender,
 ) -> None:
-    monkeypatch.delenv("CODEX_LB_TELEMETRY_ENABLED", raising=False)
+    monkeypatch.setenv("SWISSAI_LB_TELEMETRY_ENABLED", "true")
     get_settings.cache_clear()
     started = asyncio.Event()
     release = asyncio.Event()
@@ -197,9 +197,29 @@ async def test_opt_out_background_send_does_not_block_settings_response(
     from app.modules.telemetry import api as telemetry_api
 
     assert telemetry_api._OPT_OUT_TASKS
-    release.set()
-    await asyncio.gather(*tuple(telemetry_api._OPT_OUT_TASKS))
-    await asyncio.sleep(0)
+    draining = asyncio.create_task(telemetry_api.drain_opt_out_tasks(1))
+    try:
+        await asyncio.sleep(0)
+        assert not draining.done()
+        release.set()
+        assert await asyncio.wait_for(draining, 1)
+        assert not telemetry_api._OPT_OUT_TASKS
+    finally:
+        release.set()
+        draining.cancel()
+        await asyncio.gather(draining, return_exceptions=True)
+
+
+@pytest.mark.asyncio
+async def test_shutdown_admission_prevents_detached_opt_out_work(async_client, monkeypatch, opt_out_sender):
+    from app.modules.telemetry import api as telemetry_api
+
+    monkeypatch.setenv("SWISSAI_LB_TELEMETRY_ENABLED", "true")
+    get_settings.cache_clear()
+    monkeypatch.setattr(telemetry_api, "is_control_plane_task_admission_open", lambda: False)
+    response = await async_client.put("/api/settings/telemetry", json={"enabled": False})
+    assert response.status_code == 200 and response.json()["active"] is False
+    opt_out_sender.send_opt_out.assert_not_awaited()
     assert not telemetry_api._OPT_OUT_TASKS
 
 
@@ -210,7 +230,7 @@ async def test_opt_out_identity_failure_is_debug_only_and_preserves_disabled_sta
     opt_out_sender,
     caplog,
 ) -> None:
-    monkeypatch.delenv("CODEX_LB_TELEMETRY_ENABLED", raising=False)
+    monkeypatch.setenv("SWISSAI_LB_TELEMETRY_ENABLED", "true")
     get_settings.cache_clear()
 
     async def fail_identity(_store) -> None:
@@ -241,7 +261,7 @@ async def test_unexpected_opt_out_task_failure_is_debug_only_and_does_not_change
     opt_out_sender,
     caplog,
 ) -> None:
-    monkeypatch.delenv("CODEX_LB_TELEMETRY_ENABLED", raising=False)
+    monkeypatch.setenv("SWISSAI_LB_TELEMETRY_ENABLED", "true")
     get_settings.cache_clear()
     opt_out_sender.send_opt_out.side_effect = RuntimeError("unexpected sender failure")
 

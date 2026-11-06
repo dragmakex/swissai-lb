@@ -1,5 +1,5 @@
 <!--
-Thanks for contributing to codex-lb! 🙏
+Thanks for contributing to SwissAI LB.
 Fill in the sections below. Delete sections that don't apply.
 -->
 
@@ -24,21 +24,18 @@ Linked issue: <!-- e.g. Closes #123, Fixes #456 -->
 ## OpenSpec
 
 <!--
-codex-lb is OpenSpec-first. If this PR changes observable behavior, requirements,
+SwissAI LB is OpenSpec-first. If this PR changes observable behavior, requirements,
 contracts, or schema, it needs an OpenSpec change under openspec/changes/<change>/.
 
-If this PR touches an upstream-mimicking code path (Codex CLI / ChatGPT request
-shape, image pipeline, response.create framing, etc.), it must stay
-**codex-faithful** — i.e. preserve the exact wire format the real upstream
-emits. Call out anything that intentionally diverges, and link the spec section
-that records the divergence.
+For proxy changes, preserve the documented SwissAI HTTP contracts, request-body
+immutability, bounded failover, credential ownership and settlement/cleanup.
+Retained legacy compatibility code/tests do not enable ChatGPT inference routes.
 -->
 
 - [ ] This PR includes / updates an OpenSpec change
 - [ ] Not applicable — bug fix that matches the existing spec
 - [ ] Not applicable — docs / CI / chore only
-- [ ] This PR touches a codex-faithful path (image pipeline, request/response
-      shape, SSE framing, OAuth flow) and preserves upstream-equivalent behavior
+- [ ] Proxy changes preserve the supported wire format, authentication and lifecycle invariants
 
 Change directory: <!-- openspec/changes/<change>/ -->
 
@@ -86,4 +83,4 @@ Required: unit tests for new logic, integration tests for new endpoints.
 - [ ] Ran `uv run pre-commit run local-ci --hook-stage manual --all-files` or the relevant `make <target>` subset locally.
 - [ ] If touching specs: `openspec validate --specs` passes and `/opsx:verify` is clean.
 - [ ] Simplicity gates reviewed: the six simplicity rules (PRINCIPLES.md P1-P6).
-- [ ] CHANGELOG is **not** edited by hand (release-please handles it).
+- [ ] CHANGELOG is **not** edited by hand; change notes live in OpenSpec. No publication is implied.

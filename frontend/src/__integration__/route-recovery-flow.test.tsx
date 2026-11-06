@@ -53,7 +53,7 @@ vi.mock("@/features/dashboard/components/dashboard-page", async (importOriginal)
   };
 });
 
-vi.mock("@/features/accounts/components/accounts-page", () => {
+vi.mock("@/features/swissai/keys-page", () => {
   throw new Error("Rejected route chunk");
 });
 

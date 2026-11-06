@@ -1,4 +1,4 @@
-"""The host recovery commands against the running product (PLAN §4.6, docs/sso.md).
+"""Product-path recovery proof for openspec/specs/admin-auth/ops.md.
 
 The unit suite proves what each command writes. This one proves the thing an
 operator actually cares about at three in the morning: after the command runs,

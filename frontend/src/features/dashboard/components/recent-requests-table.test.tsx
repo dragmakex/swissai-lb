@@ -118,6 +118,20 @@ describe("RecentRequestsTable", () => {
     }
   });
 
+  it("shows historical SwissAI key labels, route and stream facts without subscription plans", () => {
+    render(<RecentRequestsTable {...PAGINATION_PROPS} accounts={[]} requests={[{
+      ...LAYOUT_REQUEST, accountId: null, planType: null, modelSourceId: "sak_deleted",
+      modelSourceKind: "swissai", upstreamKeyLabel: "Historical Research A",
+      route: "/v1/responses", stream: true, costUsd: null, attemptCount: 2,
+    }]} />);
+    expect(screen.getByRole("cell", { name: "Historical Research A" })).toBeInTheDocument();
+    expect(screen.getByRole("cell", { name: "/v1/responses" })).toBeInTheDocument();
+    expect(screen.queryByRole("columnheader", { name: "Plan" })).not.toBeInTheDocument();
+    const dialog = openRequestDetails();
+    expect(within(dialog).getByText("Streaming")).toBeInTheDocument();
+    expect(within(dialog).getByText("Historical Research A")).toBeInTheDocument();
+  });
+
   it("renders every existing column when layout props are omitted", () => {
     render(
       <RecentRequestsTable
@@ -164,7 +178,7 @@ describe("RecentRequestsTable", () => {
     );
 
     const accountSeparator = screen.getByRole("separator", {
-      name: "Resize Account column",
+      name: "Resize SwissAI key column",
     });
     fireEvent.pointerDown(accountSeparator, { pointerId: 7, clientX: 100 });
     fireEvent.pointerMove(accountSeparator, { pointerId: 7, clientX: 164 });
@@ -210,7 +224,7 @@ describe("RecentRequestsTable", () => {
     );
 
     const accountSeparator = screen.getByRole("separator", {
-      name: "Resize Account column",
+      name: "Resize SwissAI key column",
     });
     fireEvent.keyDown(accountSeparator, { key: "ArrowRight" });
     expect(onColumnWidthChange).toHaveBeenLastCalledWith(
@@ -316,7 +330,8 @@ describe("RecentRequestsTable", () => {
     );
 
     expect(screen.getByText("Primary Account")).toBeInTheDocument();
-    expect(screen.getByRole("cell", { name: "Plus" })).toBeInTheDocument();
+    expect(screen.queryByRole("columnheader", { name: "Plan" })).not.toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Route" })).toBeInTheDocument();
     expect(screen.getByText("Key Alpha")).toBeInTheDocument();
     expect(screen.getByText("gpt-5.1 (high, default)")).toBeInTheDocument();
     expect(screen.getByText("Requested priority")).toBeInTheDocument();

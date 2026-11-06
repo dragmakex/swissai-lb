@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-const PRIVACY_STORAGE_KEY = "codex-lb-privacy";
+const PRIVACY_STORAGE_KEY = "swissai-lb-privacy";
 
 type PrivacyState = {
   /** Whether emails are blurred across the dashboard. */

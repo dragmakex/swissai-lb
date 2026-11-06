@@ -48,9 +48,9 @@ def test_build_authorization_url_contains_required_params():
 
 
 def test_build_authorization_url_ignores_removed_originator_env(monkeypatch: pytest.MonkeyPatch):
-    # CODEX_LB_OAUTH_ORIGINATOR was removed from the settings surface
+    # SWISSAI_LB_OAUTH_ORIGINATOR was removed from the settings surface
     # (issue #1340); the originator is a fixed protocol constant now.
-    monkeypatch.setenv("CODEX_LB_OAUTH_ORIGINATOR", "codex_cli_rs")
+    monkeypatch.setenv("SWISSAI_LB_OAUTH_ORIGINATOR", "codex_cli_rs")
     get_settings.cache_clear()
 
     try:

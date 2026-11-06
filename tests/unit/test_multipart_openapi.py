@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from fastapi import FastAPI
 
 from app.main import create_app
 
@@ -59,8 +60,41 @@ def _request_schema(openapi: dict[str, Any], path: str) -> dict[str, Any]:
     return openapi["components"]["schemas"][component_name]
 
 
+def mount_legacy_upload_probe(app: FastAPI) -> None:
+    """Keep generic ingress/schema coverage without re-enabling retired routes in production."""
+    from app.modules.accounts.api import router as accounts_router
+    from app.modules.proxy.api import files_router, transcribe_router, v1_router
+
+    original = list(app.router.routes)
+    for router in (accounts_router, v1_router, transcribe_router, files_router):
+        app.include_router(router)
+    paths = {path for path, _ in _MULTIPART_OPERATIONS} | {"/backend-api/files"}
+    probes = [route for route in app.router.routes[len(original) :] if getattr(route, "path", None) in paths]
+    app.router.routes[:] = probes + original
+    app.openapi_schema = None
+
+
+def _legacy_openapi() -> dict[str, Any]:
+    app = FastAPI()
+    mount_legacy_upload_probe(app)
+    return app.openapi()
+
+
+def test_production_does_not_advertise_retired_upload_or_file_operations() -> None:
+    schema = create_app().openapi()
+    for path, _ in _MULTIPART_OPERATIONS:
+        assert path not in schema["paths"]
+    assert "/backend-api/files" not in schema["paths"]
+    assert all(
+        "multipart/form-data" not in operation.get("requestBody", {}).get("content", {})
+        for path in schema["paths"].values()
+        for operation in path.values()
+        if isinstance(operation, dict)
+    )
+
+
 def test_all_fastapi_multipart_operations_have_an_explicit_bounded_policy_surface() -> None:
-    openapi = create_app().openapi()
+    openapi = _legacy_openapi()
     actual = {
         (path, method)
         for path, path_item in openapi["paths"].items()
@@ -72,7 +106,7 @@ def test_all_fastapi_multipart_operations_have_an_explicit_bounded_policy_surfac
 
 
 def test_multipart_request_body_schemas_remain_semantically_identical() -> None:
-    openapi = create_app().openapi()
+    openapi = _legacy_openapi()
 
     assert _request_schema(openapi, "/api/accounts/import") == {
         "type": "object",
@@ -141,7 +175,7 @@ def test_multipart_request_body_schemas_remain_semantically_identical() -> None:
 
 
 def test_non_multipart_codex_image_and_file_surfaces_are_unchanged() -> None:
-    openapi = create_app().openapi()
+    openapi = _legacy_openapi()
 
     assert "/backend-api/codex/images/edits" not in openapi["paths"]
     files_body = openapi["paths"]["/backend-api/files"]["post"]["requestBody"]

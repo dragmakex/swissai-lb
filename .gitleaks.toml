@@ -1,0 +1,12 @@
+[extend]
+useDefault = true
+
+[[rules]]
+id = "generic-api-key"
+
+[[rules.allowlists]]
+description = "Reviewed false positive: TelemetryIdentity's Python type annotation is not a credential."
+condition = "AND"
+paths = ['''(^|/)app/modules/telemetry/consent\.py$''']
+regexTarget = "match"
+regexes = ['''^private_key: Ed25519PrivateKey$''']

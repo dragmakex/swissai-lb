@@ -7,7 +7,6 @@ import { AlertMessage } from "@/components/alert-message";
 import { Button } from "@/components/ui/button";
 import { useDialogState } from "@/hooks/use-dialog-state";
 import { ApiKeyAuthToggle } from "@/features/api-keys/components/api-key-auth-toggle";
-import { ApiKeyQuotaPrivacyToggle } from "@/features/api-keys/components/api-key-quota-privacy-toggle";
 import { ApiKeyCreatedDialog } from "@/features/api-keys/components/api-key-created-dialog";
 import { ApiKeyTable } from "@/features/api-keys/components/api-key-table";
 import { useApiKeys } from "@/features/api-keys/hooks/use-api-keys";
@@ -33,11 +32,9 @@ export type ApiKeysSectionProps = {
 
 export function ApiKeysSection({
   apiKeyAuthEnabled,
-  hideUpstreamQuotaFromApiKeys,
   disabled = false,
   policyControlsDisabled = disabled,
   onApiKeyAuthEnabledChange,
-  onHideUpstreamQuotaFromApiKeysChange,
 }: ApiKeysSectionProps) {
   const { t } = useTranslation();
   const {
@@ -106,11 +103,6 @@ export function ApiKeysSection({
         onChange={onApiKeyAuthEnabledChange}
       />
 
-      <ApiKeyQuotaPrivacyToggle
-        enabled={hideUpstreamQuotaFromApiKeys}
-        disabled={busy || policyControlsDisabled}
-        onChange={onHideUpstreamQuotaFromApiKeysChange}
-      />
 
       {mutationError ? <AlertMessage variant="error">{mutationError}</AlertMessage> : null}
 

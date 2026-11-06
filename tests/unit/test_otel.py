@@ -296,7 +296,7 @@ def test_create_app_instruments_unbuilt_stack_before_testclient_lifespan(
         backpressure_max_concurrent_requests=0,
     )
     monkeypatch.setattr(main, "get_settings", lambda: settings)
-    monkeypatch.setattr(main, "lifespan", probe_lifespan)
+    monkeypatch.setattr("app.modules.swissai.runtime.lifespan", probe_lifespan)
 
     app = main.create_app()
 
@@ -771,6 +771,11 @@ async def test_lifespan_drains_actual_audit_and_cancelled_fleet_tasks_before_res
     await asyncio.wait_for(audit_write_started.wait(), timeout=1)
     audit_task = next(iter(audit_service_module._AUDIT_LOG_TASKS))
 
+    # This historical lifespan probe owns a test-only audit route, not a production account mutation surface.
+    from app.modules.accounts import api as accounts_api
+
+    monkeypatch.setattr(main.app.router, "routes", list(main.app.router.routes))
+    main.app.include_router(accounts_api.router)
     transport = ASGITransport(app=main.app)
     async with AsyncClient(transport=transport, base_url="http://testserver") as client:
         fleet_request_task = asyncio.create_task(client.post("/api/fleet/refresh"))

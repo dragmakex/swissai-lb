@@ -3,26 +3,14 @@ from __future__ import annotations
 import asyncio
 import inspect
 import json
-import secrets
 from dataclasses import dataclass
 from typing import Any, Mapping
-from urllib.parse import urlencode
 
 import aiohttp
 from aiohttp_socks import ProxyConnector
 from python_socks import ProxyType
 from yarl import URL
 
-from app.core.clients.native_egress import (
-    NativeEgressClient,
-    NativeEgressError,
-    NativeEgressRequest,
-    NativeEgressTransportError,
-    NativeEgressUnavailable,
-    NativeSseOptions,
-    NativeWebSocketRequest,
-    discover_native_egress_client,
-)
 from app.core.resilience.network_recovery import (
     PROCESS_NETWORK_UNAVAILABLE_CODE,
     is_pre_dispatch_connection_failure,
@@ -93,7 +81,6 @@ class CodexWebSocketResult:
     context: Any | None
     route: ResolvedUpstreamRoute
     fallback_used: bool
-    native: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -113,16 +100,6 @@ class _BufferedResponse:
         return json.loads(self.content)
 
 
-@dataclass(frozen=True, slots=True)
-class _PreparedNativeRequest:
-    url: str
-    headers: dict[str, str]
-    body: bytes | None
-    timeout_seconds: float | None
-    connect_timeout_seconds: float | None
-    response_head_timeout_seconds: float | None
-
-
 async def release_codex_response(response: Any) -> None:
     """Release an unbuffered upstream response once its consumer stops reading.
 
@@ -130,7 +107,7 @@ async def release_codex_response(response: Any) -> None:
     cancellation, downstream disconnect). Closing the owning session alone
     leaves the aiohttp ``Connection`` acquired, so the cyclic GC later finalizes
     it as ``Unclosed connection``. Duck-typed on purpose: aiohttp exposes
-    ``release()``, the native egress response exposes ``aclose()``, and buffered
+    ``release()``, session-owned wrappers expose async cleanup, and buffered
     or test responses expose neither.
     """
     for name in ("release", "close", "aclose"):
@@ -220,16 +197,8 @@ class _SessionOwnedWebSocketContext:
 
 
 class CodexClient:
-    def __init__(
-        self,
-        session: Any,
-        *,
-        native_egress_client: NativeEgressClient | None = None,
-    ) -> None:
+    def __init__(self, session: Any) -> None:
         self._session = session
-        self._native_egress_client = (
-            native_egress_client if native_egress_client is not None else discover_native_egress_client()
-        )
 
     async def request(self, method: str, url: str, *, route: ResolvedUpstreamRoute, **kwargs: Any) -> Any:
         return (await self.request_with_route_metadata(method, url, route=route, **kwargs)).response
@@ -240,16 +209,12 @@ class CodexClient:
         url: str,
         *,
         route: ResolvedUpstreamRoute,
-        native_sse: NativeSseOptions | None = None,
         **kwargs: Any,
     ) -> CodexRequestResult:
         if route is None:
             raise ValueError("Codex upstream calls require a resolved upstream proxy route")
         buffer_response = bool(kwargs.pop("buffer_response", True))
-        if native_sse is not None and buffer_response:
-            raise ValueError("Native SSE framing requires buffer_response=False")
         _reject_reserved(kwargs)
-        native_request = _prepare_native_request(url, kwargs)
         aiohttp_kwargs = dict(kwargs)
         _normalize_aiohttp_request_kwargs(aiohttp_kwargs)
         endpoints = (route.endpoint, *route.fallbacks)
@@ -258,31 +223,7 @@ class CodexClient:
         for index, endpoint in enumerate(endpoints):
             candidate = route.with_endpoint(endpoint, tuple(endpoints[index + 1 :]))
             try:
-                response: Any | None = None
-                if self._native_egress_client is not None and native_request is not None:
-                    try:
-                        response = await self._native_egress_client.request(
-                            NativeEgressRequest(
-                                method=method,
-                                url=native_request.url,
-                                headers=native_request.headers,
-                                body=native_request.body,
-                                timeout_seconds=native_request.timeout_seconds,
-                                connect_timeout_seconds=native_request.connect_timeout_seconds,
-                                response_head_timeout_seconds=native_request.response_head_timeout_seconds,
-                                proxy_url=endpoint.proxy_url,
-                                sse=native_sse,
-                            )
-                        )
-                        if buffer_response:
-                            response = await _buffer_response(response)
-                    except NativeEgressUnavailable:
-                        response = None
-                    except NativeEgressError as exc:
-                        raise _native_transport_error("request", endpoint.id, exc) from None
-                if response is not None:
-                    pass
-                elif endpoint.scheme.startswith("socks"):
+                if endpoint.scheme.startswith("socks"):
                     response = await _request_via_socks_proxy(
                         method,
                         url,
@@ -365,7 +306,6 @@ class CodexClient:
     ) -> CodexWebSocketResult:
         if route is None:
             raise ValueError("Codex upstream calls require a resolved upstream proxy route")
-        interpret_responses = bool(kwargs.pop("native_interpret_responses", False))
         _reject_reserved(kwargs)
         endpoints = (route.endpoint, *route.fallbacks)
         _reject_credentialed_plaintext_target(url, endpoints)
@@ -374,29 +314,7 @@ class CodexClient:
             context: Any | None = None
             entered_context: Any | None = None
             try:
-                websocket: Any | None = None
-                native_request = _prepare_native_websocket_request(
-                    url,
-                    endpoint.proxy_url,
-                    kwargs,
-                    interpret_responses=interpret_responses,
-                )
-                if self._native_egress_client is not None and native_request is not None:
-                    try:
-                        websocket = await self._native_egress_client.websocket(native_request)
-                    except NativeEgressUnavailable:
-                        websocket = None
-                    except NativeEgressError as exc:
-                        raise _native_transport_error("websocket", endpoint.id, exc) from None
-                if websocket is not None:
-                    return CodexWebSocketResult(
-                        websocket,
-                        None,
-                        candidate,
-                        index > 0,
-                        native=True,
-                    )
-                elif endpoint.scheme.startswith("socks"):
+                if endpoint.scheme.startswith("socks"):
                     websocket, context = await _open_ws_via_socks_proxy(url, endpoint, **kwargs)
                     entered_context = context
                 else:
@@ -582,232 +500,6 @@ def _normalize_aiohttp_request_kwargs(kwargs: dict[str, Any]) -> None:
     kwargs["data"] = form
 
 
-def _prepare_native_request(
-    url: str,
-    kwargs: Mapping[str, Any],
-) -> _PreparedNativeRequest | None:
-    supported = {
-        "data",
-        "files",
-        "headers",
-        "json",
-        "params",
-        "skip_auto_headers",
-        "timeout",
-    }
-    if set(kwargs).difference(supported):
-        return None
-
-    raw_headers = kwargs.get("headers") or {}
-    if not isinstance(raw_headers, Mapping):
-        return None
-    headers = {str(name): str(value) for name, value in raw_headers.items()}
-
-    params = kwargs.get("params")
-    if params is not None:
-        try:
-            url = str(URL(url).update_query(params))
-        except (TypeError, ValueError):
-            return None
-
-    has_json = "json" in kwargs
-    data = kwargs.get("data")
-    files = kwargs.get("files")
-    if has_json and (data is not None or files is not None):
-        return None
-
-    body: bytes | None
-    if has_json:
-        try:
-            body = json.dumps(
-                kwargs.get("json"),
-                ensure_ascii=True,
-                separators=(",", ":"),
-            ).encode("utf-8")
-        except (TypeError, ValueError):
-            return None
-        _set_header_default(headers, "Content-Type", "application/json")
-    elif files is not None:
-        encoded = _encode_native_multipart(data, files)
-        if encoded is None:
-            return None
-        body, content_type = encoded
-        _set_header_default(headers, "Content-Type", content_type)
-    elif data is None:
-        body = None
-    elif isinstance(data, bytes):
-        body = data
-    elif isinstance(data, (bytearray, memoryview)):
-        body = bytes(data)
-    elif isinstance(data, str):
-        body = data.encode("utf-8")
-        _set_header_default(headers, "Content-Type", "text/plain; charset=utf-8")
-    elif isinstance(data, Mapping):
-        body = urlencode([(str(name), str(value)) for name, value in data.items()], doseq=True).encode()
-        _set_header_default(headers, "Content-Type", "application/x-www-form-urlencoded")
-    else:
-        return None
-
-    timeouts = _native_timeout_parts(kwargs.get("timeout"))
-    if timeouts is None:
-        return None
-    timeout_seconds, connect_timeout_seconds, response_head_timeout_seconds = timeouts
-    return _PreparedNativeRequest(
-        url=url,
-        headers=headers,
-        body=body,
-        timeout_seconds=timeout_seconds,
-        connect_timeout_seconds=connect_timeout_seconds,
-        response_head_timeout_seconds=response_head_timeout_seconds,
-    )
-
-
-def _native_timeout_parts(value: Any) -> tuple[float | None, float | None, float | None] | None:
-    if value is None:
-        return 60.0, None, None
-    if isinstance(value, aiohttp.ClientTimeout):
-        total = float(value.total) if value.total is not None else None
-        connect = float(value.sock_connect) if value.sock_connect is not None else None
-        response_head = float(value.sock_read) if value.sock_read is not None else None
-    else:
-        try:
-            total = float(value)
-        except (TypeError, ValueError):
-            return None
-        connect = None
-        response_head = None
-    if any(part is not None and part <= 0 for part in (total, connect, response_head)):
-        return None
-    return total, connect, response_head
-
-
-def _encode_native_multipart(data: Any, files: Any) -> tuple[bytes, str] | None:
-    data_items = _form_items(data)
-    file_items = _form_items(files)
-    if data_items is None or file_items is None:
-        return None
-    boundary = f"codex-lb-{secrets.token_hex(16)}"
-    chunks: list[bytes] = []
-    for name, value in data_items:
-        if not isinstance(value, (str, bytes, bytearray, memoryview, int, float, bool)):
-            return None
-        payload = (
-            value.encode()
-            if isinstance(value, str)
-            else bytes(value)
-            if not isinstance(value, (int, float, bool))
-            else str(value).encode()
-        )
-        chunks.extend(
-            (
-                f"--{boundary}\r\n".encode(),
-                f'Content-Disposition: form-data; name="{_multipart_parameter(name)}"\r\n\r\n'.encode(),
-                payload,
-                b"\r\n",
-            )
-        )
-    for name, value in file_items:
-        if not isinstance(value, tuple) or len(value) < 2:
-            return None
-        filename = str(value[0] or name)
-        file_value = value[1]
-        content_type = str(value[2]) if len(value) >= 3 and value[2] else "application/octet-stream"
-        if isinstance(file_value, str):
-            payload = file_value.encode()
-        elif isinstance(file_value, (bytes, bytearray, memoryview)):
-            payload = bytes(file_value)
-        else:
-            return None
-        chunks.extend(
-            (
-                f"--{boundary}\r\n".encode(),
-                (
-                    f'Content-Disposition: form-data; name="{_multipart_parameter(name)}"; '
-                    f'filename="{_multipart_parameter(filename)}"\r\n'
-                ).encode(),
-                f"Content-Type: {content_type}\r\n\r\n".encode(),
-                payload,
-                b"\r\n",
-            )
-        )
-    chunks.append(f"--{boundary}--\r\n".encode())
-    return b"".join(chunks), f"multipart/form-data; boundary={boundary}"
-
-
-def _form_items(value: Any) -> list[tuple[str, Any]] | None:
-    if value is None:
-        return []
-    items = value.items() if isinstance(value, Mapping) else value
-    try:
-        return [(str(name), item) for name, item in items]
-    except (TypeError, ValueError):
-        return None
-
-
-def _multipart_parameter(value: str) -> str:
-    return value.replace("\\", "\\\\").replace('"', '\\"').replace("\r", "").replace("\n", "")
-
-
-def _set_header_default(headers: dict[str, str], name: str, value: str) -> None:
-    if not any(existing.lower() == name.lower() for existing in headers):
-        headers[name] = value
-
-
-def _prepare_native_websocket_request(
-    url: str,
-    proxy_url: str,
-    kwargs: Mapping[str, Any],
-    *,
-    interpret_responses: bool = False,
-) -> NativeWebSocketRequest | None:
-    supported = {
-        "compress",
-        "headers",
-        "heartbeat",
-        "max_msg_size",
-        "protocols",
-        "timeout",
-    }
-    if set(kwargs).difference(supported):
-        return None
-    raw_headers = kwargs.get("headers") or {}
-    if not isinstance(raw_headers, Mapping):
-        return None
-    headers = {str(name): str(value) for name, value in raw_headers.items()}
-    protocols = kwargs.get("protocols")
-    if protocols:
-        try:
-            headers["sec-websocket-protocol"] = ", ".join(str(value) for value in protocols)
-        except TypeError:
-            return None
-    try:
-        connect_timeout = float(kwargs.get("timeout", 10.0))
-        max_message_bytes = int(kwargs.get("max_msg_size", 4 * 1024 * 1024))
-        compress = int(kwargs.get("compress", 0))
-        heartbeat = kwargs.get("heartbeat")
-        ping_interval_seconds = float(heartbeat) if heartbeat is not None else None
-        ping_timeout_seconds = ping_interval_seconds / 2 if ping_interval_seconds is not None else None
-    except (TypeError, ValueError):
-        return None
-    if (
-        compress != 15
-        or connect_timeout <= 0
-        or max_message_bytes <= 0
-        or (ping_interval_seconds is not None and ping_interval_seconds <= 0)
-    ):
-        return None
-    return NativeWebSocketRequest(
-        url=url,
-        headers=headers,
-        connect_timeout_seconds=connect_timeout,
-        max_message_bytes=max_message_bytes,
-        ping_interval_seconds=ping_interval_seconds,
-        ping_timeout_seconds=ping_timeout_seconds,
-        proxy_url=proxy_url,
-        interpret_responses=interpret_responses,
-    )
-
-
 def _add_form_file(form: aiohttp.FormData, name: str, value: Any) -> None:
     if isinstance(value, tuple):
         filename = value[0] if len(value) >= 1 else None
@@ -932,35 +624,6 @@ def _transport_error_handshake_headers(exc: Exception) -> Mapping[str, str] | No
 def _transport_error_handshake_message(exc: Exception) -> str | None:
     message = getattr(exc, "message", None)
     return message if isinstance(message, str) else None
-
-
-def _native_transport_error(
-    operation: str,
-    endpoint_id: str,
-    exc: NativeEgressError,
-) -> CodexTransportError:
-    if isinstance(exc, NativeEgressTransportError):
-        process_failure = exc.failure_phase in {
-            "helper_exit",
-            "helper_read",
-            "helper_write",
-            "shutdown",
-        }
-        return CodexTransportError(
-            codex_transport_error_message(operation, endpoint_id, exc),
-            status_code=exc.status_code,
-            error_code=PROCESS_NETWORK_UNAVAILABLE_CODE if process_failure else None,
-            retryable_same_contract=(exc.retryable_same_contract and not exc.is_tls_verification_failure),
-            failure_phase=exc.failure_phase,
-            is_tls_verification_failure=exc.is_tls_verification_failure,
-            handshake_headers=dict(exc.headers) if exc.headers else None,
-            handshake_message=(exc.body.decode("utf-8", errors="replace") if exc.body else None),
-        )
-    return CodexTransportError(
-        codex_transport_error_message(operation, endpoint_id, exc),
-        retryable_same_contract=False,
-        failure_phase="protocol",
-    )
 
 
 def _without_same_contract_retry(exc: CodexTransportError) -> CodexTransportError:

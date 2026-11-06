@@ -39,14 +39,15 @@ and this file is its human-readable rendering.
 - Raising a budget value itself is a change to this contract and gets the
   same label plus an OpenSpec change.
 
-## P4 — Features are documented in the docs site + OpenSpec, not the README
+## P4 — Features are documented under OpenSpec, not the README
 
-- New feature documentation goes to `docs/` (the user-facing rendering)
-  and MUST link back to the owning `openspec/specs/<capability>/` entry,
-  which stays the source of truth.
+- Requirements live in the owning `openspec/specs/<capability>/spec.md`;
+  narrative guidance belongs beside it in context/ops/reference files.
+- Any future user-facing rendering MUST link to that owner and must not
+  become a second source of truth. This fork has no maintained docs site.
 - A new README section is a budget exception under P3, not a documentation
-  mechanism. The README exists to get a new user from zero to a running
-  proxy — everything else belongs in the docs site.
+  mechanism. The README gets a new user to a running application; detailed
+  guidance belongs under the owning capability.
 
 ## P5 — Dashboard-visible changes show their pixels
 
@@ -82,7 +83,7 @@ and this file is its human-readable rendering.
 | P1 defaults-off | New feature works untouched with zero config; no new required setup step | CONTRIBUTING [Simplicity gates](.github/CONTRIBUTING.md#simplicity-gates); PR template "Simplicity" |
 | P2 settings justified | PR body names each new setting and why it can't be a default | PR template "Simplicity" |
 | P3 budgets | README sections, `.env.example`, dashboard core nav within `.github/simplicity-budgets.toml` | CI budget check (`.github/workflows/simplicity-budgets.yml`); `simplicity-budget-approved` label for exceptions |
-| P4 docs placement | Feature docs land in `docs/` + OpenSpec, not new README sections | CONTRIBUTING [Simplicity gates](.github/CONTRIBUTING.md#simplicity-gates) |
+| P4 docs placement | Feature/operations docs live under their OpenSpec owner, not new README sections | CONTRIBUTING [Simplicity gates](.github/CONTRIBUTING.md#simplicity-gates) |
 | P5 screenshots | Before/after screenshots for dashboard-visible changes | PR template "Screenshots / output" |
 | P6 dashboard-primary configuration | Each new setting has a tier; T3 settings live in `dashboard_settings`, not env-only; precedence default < env < dashboard is not inverted | `make lint` (`scripts/check_settings_tiers.py`, see P6 for the spec pointer); PR template "Simplicity" |
 

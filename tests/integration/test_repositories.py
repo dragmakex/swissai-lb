@@ -1011,7 +1011,7 @@ async def test_accounts_upsert_merge_by_chatgpt_identity_prefers_matching_worksp
 
 @pytest.mark.asyncio
 async def test_accounts_upsert_merge_by_chatgpt_identity_reconciles_duplicate_rows(db_setup, monkeypatch):
-    monkeypatch.setenv("CODEX_LB_UPSTREAM_ROUTE_CACHE_TTL_SECONDS", "60")
+    monkeypatch.setenv("SWISSAI_LB_UPSTREAM_ROUTE_CACHE_TTL_SECONDS", "60")
     get_settings.cache_clear()
     set_cache_invalidation_poller(CacheInvalidationPoller(SessionLocal))
     async with SessionLocal() as session:

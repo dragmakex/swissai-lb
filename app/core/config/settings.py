@@ -32,7 +32,7 @@ def _resolve_env_files() -> tuple[Path, ...]:
     """Resolve the env files read at settings load.
 
     Default: ``.env`` / ``.env.local`` next to the module root (the repository
-    checkout). ``CODEX_LB_ENV_FILE`` — an ``os.pathsep``-separated list of
+    checkout). ``SWISSAI_LB_ENV_FILE`` — an ``os.pathsep``-separated list of
     paths — overrides that discovery for installs whose module root cannot
     contain env files: the Nix package's module root lives in the read-only
     store, so its wrapper points this at the launch directory. It is a
@@ -41,7 +41,7 @@ def _resolve_env_files() -> tuple[Path, ...]:
     Unset (every non-Nix launch path) preserves module-root discovery
     unchanged; launch-directory env files are never loaded implicitly.
     """
-    raw = os.getenv("CODEX_LB_ENV_FILE", "")
+    raw = os.getenv("SWISSAI_LB_ENV_FILE", "")
     files = tuple(Path(entry.strip()).expanduser() for entry in raw.split(os.pathsep) if entry.strip())
     if files:
         return files
@@ -71,74 +71,77 @@ _REMOVED_SETTINGS: tuple[str, ...] = (
     # remove-dead-env-settings (first release after v1.24.0): retention is a
     # dashboard runtime setting (Settings -> Advanced -> Data retention);
     # NULL now means disabled.
-    "CODEX_LB_REQUEST_LOG_RETENTION_DAYS",
-    "CODEX_LB_USAGE_HISTORY_RETENTION_DAYS",
+    "SWISSAI_LB_REQUEST_LOG_RETENTION_DAYS",
+    "SWISSAI_LB_USAGE_HISTORY_RETENTION_DAYS",
     # remove-dead-env-settings (first release after v1.24.0): dashboard-owned
     # columns that the env value only seeded on first boot (or never read).
-    "CODEX_LB_HTTP_DOWNSTREAM_TRANSPORT_POLICY",
-    "CODEX_LB_OPENAI_CACHE_AFFINITY_MAX_AGE_SECONDS",
-    "CODEX_LB_WARMUP_MODEL",
-    "CODEX_LB_HTTP_RESPONSES_SESSION_BRIDGE_GATEWAY_SAFE_MODE",
+    "SWISSAI_LB_HTTP_DOWNSTREAM_TRANSPORT_POLICY",
+    "SWISSAI_LB_OPENAI_CACHE_AFFINITY_MAX_AGE_SECONDS",
+    "SWISSAI_LB_WARMUP_MODEL",
+    "SWISSAI_LB_HTTP_RESPONSES_SESSION_BRIDGE_GATEWAY_SAFE_MODE",
     # Dashboard-authoritative settings (remove-upstream-stream-transport-env):
     # the dashboard row is the only source of the upstream stream transport.
-    "CODEX_LB_UPSTREAM_STREAM_TRANSPORT",
+    "SWISSAI_LB_UPSTREAM_STREAM_TRANSPORT",
     # constantize-core-tunables (first release after v1.25.0-beta.5): never-tuned
     # core tunables became fixed constants (see the openspec change context).
-    "CODEX_LB_UPSTREAM_COMPACT_TIMEOUT_SECONDS",
-    "CODEX_LB_MAX_SSE_EVENT_BYTES",
-    "CODEX_LB_UPSTREAM_RESPONSE_CREATE_MAX_BYTES",
-    "CODEX_LB_OAUTH_TIMEOUT_SECONDS",
-    "CODEX_LB_TOKEN_REFRESH_TIMEOUT_SECONDS",
-    "CODEX_LB_TOKEN_REFRESH_CLAIM_TTL_SECONDS",
-    "CODEX_LB_PROXY_REFRESH_FAILURE_COOLDOWN_SECONDS",
-    "CODEX_LB_PROXY_ADMISSION_WAIT_TIMEOUT_SECONDS",
-    "CODEX_LB_USAGE_FETCH_TIMEOUT_SECONDS",
-    "CODEX_LB_USAGE_FETCH_MAX_RETRIES",
-    "CODEX_LB_USAGE_REFRESH_ENABLED",
-    "CODEX_LB_USAGE_REFRESH_INTERVAL_SECONDS",
-    "CODEX_LB_USAGE_REFRESH_AUTH_FAILURE_COOLDOWN_SECONDS",
-    "CODEX_LB_LIVE_USAGE_INGESTION_ENABLED",
-    "CODEX_LB_RATE_LIMIT_RESET_CREDITS_REFRESH_INTERVAL_SECONDS",
-    "CODEX_LB_STICKY_SESSION_CLEANUP_ENABLED",
-    "CODEX_LB_QUOTA_PLANNER_SCHEDULER_ENABLED",
-    "CODEX_LB_MODEL_REGISTRY_ENABLED",
-    "CODEX_LB_MAX_DECOMPRESSED_BODY_BYTES",
-    "CODEX_LB_MAX_DECOMPRESSED_RESPONSES_BODY_BYTES",
-    "CODEX_LB_IMAGE_INLINE_FETCH_ENABLED",
-    "CODEX_LB_IMAGE_INLINE_ALLOWED_HOSTS",
-    "CODEX_LB_IMAGES_DEFAULT_MODEL",
-    "CODEX_LB_OPENAI_PROMPT_CACHE_KEY_DERIVATION_ENABLED",
-    "CODEX_LB_PROXY_TOKEN_REFRESH_LIMIT",
-    "CODEX_LB_PROXY_UPSTREAM_WEBSOCKET_CONNECT_LIMIT",
-    "CODEX_LB_PROXY_COMPACT_RESPONSE_CREATE_LIMIT",
+    "SWISSAI_LB_UPSTREAM_COMPACT_TIMEOUT_SECONDS",
+    "SWISSAI_LB_MAX_SSE_EVENT_BYTES",
+    "SWISSAI_LB_UPSTREAM_RESPONSE_CREATE_MAX_BYTES",
+    "SWISSAI_LB_OAUTH_TIMEOUT_SECONDS",
+    "SWISSAI_LB_TOKEN_REFRESH_TIMEOUT_SECONDS",
+    "SWISSAI_LB_TOKEN_REFRESH_CLAIM_TTL_SECONDS",
+    "SWISSAI_LB_PROXY_REFRESH_FAILURE_COOLDOWN_SECONDS",
+    "SWISSAI_LB_PROXY_ADMISSION_WAIT_TIMEOUT_SECONDS",
+    "SWISSAI_LB_USAGE_FETCH_TIMEOUT_SECONDS",
+    "SWISSAI_LB_USAGE_FETCH_MAX_RETRIES",
+    "SWISSAI_LB_USAGE_REFRESH_ENABLED",
+    "SWISSAI_LB_USAGE_REFRESH_INTERVAL_SECONDS",
+    "SWISSAI_LB_USAGE_REFRESH_AUTH_FAILURE_COOLDOWN_SECONDS",
+    "SWISSAI_LB_LIVE_USAGE_INGESTION_ENABLED",
+    "SWISSAI_LB_RATE_LIMIT_RESET_CREDITS_REFRESH_INTERVAL_SECONDS",
+    "SWISSAI_LB_STICKY_SESSION_CLEANUP_ENABLED",
+    "SWISSAI_LB_QUOTA_PLANNER_SCHEDULER_ENABLED",
+    "SWISSAI_LB_MODEL_REGISTRY_ENABLED",
+    "SWISSAI_LB_MAX_DECOMPRESSED_BODY_BYTES",
+    "SWISSAI_LB_MAX_DECOMPRESSED_RESPONSES_BODY_BYTES",
+    "SWISSAI_LB_IMAGE_INLINE_FETCH_ENABLED",
+    "SWISSAI_LB_IMAGE_INLINE_ALLOWED_HOSTS",
+    "SWISSAI_LB_IMAGES_DEFAULT_MODEL",
+    "SWISSAI_LB_OPENAI_PROMPT_CACHE_KEY_DERIVATION_ENABLED",
+    "SWISSAI_LB_PROXY_TOKEN_REFRESH_LIMIT",
+    "SWISSAI_LB_PROXY_UPSTREAM_WEBSOCKET_CONNECT_LIMIT",
+    "SWISSAI_LB_PROXY_COMPACT_RESPONSE_CREATE_LIMIT",
     # K2 bridge (constantize-session-bridge-tunables): never-tuned HTTP session
     # bridge tunables are fixed module constants now (see
     # app/modules/proxy/_service/http_bridge/helpers.py, retry_circuit.py,
     # request_submit.py and app/modules/proxy/api.py).
-    "CODEX_LB_HTTP_RESPONSES_SESSION_BRIDGE_IDLE_TTL_SECONDS",
-    "CODEX_LB_HTTP_RESPONSES_SESSION_BRIDGE_CODEX_IDLE_TTL_SECONDS",
-    "CODEX_LB_HTTP_RESPONSES_SESSION_BRIDGE_STUCK_GATE_RETIRE_AFTER_SECONDS",
-    "CODEX_LB_HTTP_RESPONSES_SESSION_BRIDGE_ANCHOR_POISON_FAILURE_THRESHOLD",
-    "CODEX_LB_HTTP_RESPONSES_SESSION_BRIDGE_SERVER_RECOVERY_MAX_ATTEMPTS",
-    "CODEX_LB_HTTP_RESPONSES_SESSION_BRIDGE_CLEAN_CLOSE_RETRY_JITTER_MAX_SECONDS",
-    "CODEX_LB_HTTP_RESPONSES_SESSION_BRIDGE_OPERATION_LEDGER_ENABLED",
+    "SWISSAI_LB_HTTP_RESPONSES_SESSION_BRIDGE_IDLE_TTL_SECONDS",
+    "SWISSAI_LB_HTTP_RESPONSES_SESSION_BRIDGE_CODEX_IDLE_TTL_SECONDS",
+    "SWISSAI_LB_HTTP_RESPONSES_SESSION_BRIDGE_STUCK_GATE_RETIRE_AFTER_SECONDS",
+    "SWISSAI_LB_HTTP_RESPONSES_SESSION_BRIDGE_ANCHOR_POISON_FAILURE_THRESHOLD",
+    "SWISSAI_LB_HTTP_RESPONSES_SESSION_BRIDGE_SERVER_RECOVERY_MAX_ATTEMPTS",
+    "SWISSAI_LB_HTTP_RESPONSES_SESSION_BRIDGE_CLEAN_CLOSE_RETRY_JITTER_MAX_SECONDS",
+    "SWISSAI_LB_HTTP_RESPONSES_SESSION_BRIDGE_OPERATION_LEDGER_ENABLED",
     # end K2 bridge
     # drop-bridge-recovery-modes (first release after v1.25.0-beta.7): the
     # three non-default ambiguous-continuation recovery modes were deleted and
     # the shipped ``fail_closed`` behaviour is now the only one.
-    "CODEX_LB_HTTP_RESPONSES_SESSION_BRIDGE_AMBIGUOUS_CONTINUATION_RECOVERY_MODE",
+    "SWISSAI_LB_HTTP_RESPONSES_SESSION_BRIDGE_AMBIGUOUS_CONTINUATION_RECOVERY_MODE",
     # constantize-token-refresh-interval (first release after v1.25.0-beta.7):
     # the proactive refresh window is the fixed eight-day
     # ``TOKEN_REFRESH_INTERVAL_DAYS`` in ``app/core/auth/refresh.py``. Its only
     # live consumer, the traffic-parity canary, now suppresses proactive
     # refresh by stamping its isolated ``auth.json`` inside the window instead
     # of widening the window for the whole process.
-    "CODEX_LB_TOKEN_REFRESH_INTERVAL_DAYS",
+    "SWISSAI_LB_TOKEN_REFRESH_INTERVAL_DAYS",
+    # SwissAI has no upstream WebSocket/session bridge.
+    "SWISSAI_LB_HTTP_RESPONSES_SESSION_BRIDGE_OPERATION_EVENT_SPOOL_MAX_BYTES",
+    "SWISSAI_LB_HTTP_RESPONSES_SESSION_BRIDGE_OPERATION_SPOOL_FORMAT",
 )
 
 
 def warn_removed_settings(environ: Mapping[str, str] | None = None) -> list[str]:
-    """Log one WARN listing removed ``CODEX_LB_*`` env vars still set.
+    """Log one WARN listing removed ``SWISSAI_LB_*`` env vars still set.
 
     Scans the process environment plus the same env files Settings loads
     (``ENV_FILES``), so removed names lingering in ``.env``/``.env.local``
@@ -159,7 +162,7 @@ def warn_removed_settings(environ: Mapping[str, str] | None = None) -> list[str]
     return found
 
 
-DOCKER_DATA_DIR = Path("/var/lib/codex-lb")
+DOCKER_DATA_DIR = Path("/var/lib/swissai-lb")
 DOCKER_CALLBACK_HOST = "0.0.0.0"
 
 
@@ -168,10 +171,10 @@ def _in_container() -> bool:
 
 
 def _default_home_dir() -> Path:
-    env_dir = os.getenv("CODEX_LB_DATA_DIR")
+    env_dir = os.getenv("SWISSAI_LB_DATA_DIR")
     if env_dir and env_dir.strip():
         return Path(env_dir.strip())
-    home_dir = Path.home() / ".codex-lb"
+    home_dir = Path.home() / ".swissai-lb"
     if home_dir.exists():
         return home_dir
     if _in_container():
@@ -187,7 +190,7 @@ def _default_oauth_callback_host() -> str:
 
 def _default_http_bridge_instance_id() -> str:
     hostname = socket.gethostname().strip()
-    return hostname or "codex-lb"
+    return hostname or "swissai-lb"
 
 
 def _default_upstream_websocket_trust_env() -> bool:
@@ -196,7 +199,7 @@ def _default_upstream_websocket_trust_env() -> bool:
 
 # Startup guard, not a setting: the only supported value is 1 (see
 # ``Settings._reject_multiple_workers_per_instance``).
-_WORKERS_PER_INSTANCE_ENV = "CODEX_LB_WORKERS_PER_INSTANCE"
+_WORKERS_PER_INSTANCE_ENV = "SWISSAI_LB_WORKERS_PER_INSTANCE"
 
 
 def _effective_environ() -> dict[str, str | None]:
@@ -210,7 +213,7 @@ def _effective_environ() -> dict[str, str | None]:
 def _env_key(environ: Mapping[str, str | None], name: str) -> str | None:
     """Return the key under which ``name`` is declared, matching case-insensitively.
 
-    pydantic-settings resolves ``CODEX_LB_*`` names case-insensitively
+    pydantic-settings resolves ``SWISSAI_LB_*`` names case-insensitively
     (``case_sensitive=False`` is the ``BaseSettings`` default), so the env
     guards that replaced former fields must accept the same spellings a field
     did. An exact-case declaration wins over other casings.
@@ -295,7 +298,7 @@ def _normalize_cidr_list(value: StringListInput, *, field_name: str, invalid_lab
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_prefix="CODEX_LB_",
+        env_prefix="SWISSAI_LB_",
         env_file=ENV_FILES,
         env_file_encoding="utf-8",
         extra="ignore",
@@ -317,7 +320,10 @@ class Settings(BaseSettings):
     database_sqlite_startup_check_mode: Literal["quick", "full", "off"] = "quick"
     database_alembic_auto_remap_enabled: bool = True
     database_migration_lock_timeout_seconds: float = Field(default=300.0, gt=0)
-    upstream_base_url: str = "https://chatgpt.com/backend-api"
+    upstream_base_url: str = "https://api.swissai.svc.cscs.ch/v1"
+    allow_insecure_upstream: bool = False
+    # Explicit LAN/public anonymous mode is separate from dashboard login.
+    proxy_allow_anonymous_lan: bool = False
     # T3 → dashboard (deprecated env alias, remove next minor)
     upstream_connect_timeout_seconds: float = 8.0
     upstream_websocket_trust_env: bool = Field(default_factory=_default_upstream_websocket_trust_env)
@@ -328,7 +334,7 @@ class Settings(BaseSettings):
     # T3 → dashboard (deprecated env alias, remove next minor)
     compact_request_budget_seconds: float = Field(default=180.0, gt=0)
     # T3 → dashboard (deprecated env alias, remove next minor)
-    stream_idle_timeout_seconds: float = Field(default=7200.0, gt=0)
+    stream_idle_timeout_seconds: float = Field(default=300.0, gt=0)
     # T3 → dashboard (deprecated env alias, remove next minor)
     sse_keepalive_interval_seconds: float = Field(default=10.0, ge=0)
     # T3 → dashboard (deprecated env alias, remove next minor)
@@ -346,7 +352,7 @@ class Settings(BaseSettings):
     additional_quota_registry_file: Path | None = None
     # T3 → dashboard (deprecated env alias, remove next minor)
     rate_limit_reset_credits_refresh_enabled: bool = True
-    http_responses_session_bridge_enabled: bool = True
+    http_responses_session_bridge_enabled: bool = False
     # T3 → dashboard (deprecated env alias, remove next minor)
     http_responses_session_bridge_request_budget_seconds: float = Field(default=7200.0, gt=0)
     # T3 → dashboard (deprecated env alias, remove next minor): the same-name
@@ -354,12 +360,6 @@ class Settings(BaseSettings):
     http_responses_session_bridge_codex_prewarm_enabled: bool = False
     http_responses_session_bridge_max_sessions: int = Field(default=256, gt=0)
     http_responses_session_bridge_queue_limit: int = Field(default=8, gt=0)
-    # Bound durable replay storage per operation so a long response cannot
-    # exhaust the database. An incomplete spool is never replayed.
-    http_responses_session_bridge_operation_event_spool_max_bytes: int = Field(default=2 * 1024 * 1024, gt=0)
-    # Rollout fence: chunks_v2 must be enabled only after every serving replica
-    # runs the dual-reader schema expansion.
-    http_responses_session_bridge_operation_spool_format: Literal["rows_v1", "chunks_v2"] = "rows_v1"
     http_responses_session_bridge_operation_event_spool_batch_size: int = Field(default=32, gt=0, le=256)
     http_responses_session_bridge_operation_event_spool_flush_interval_seconds: float = Field(
         default=0.1,
@@ -397,7 +397,7 @@ class Settings(BaseSettings):
     # ERROR and continues, "off" disables the check.
     encryption_key_fingerprint_mode: Literal["enforce", "warn", "off"] = "enforce"
     database_migrations_fail_fast: bool = True
-    # Incident-debugging trace channels (env ``CODEX_LB_TRACE``), a
+    # Incident-debugging trace channels (env ``SWISSAI_LB_TRACE``), a
     # comma-separated list. Empty (the default) disables all trace logging.
     # Channels: ``shape`` (request shape), ``shape_raw_cache_key`` (include the
     # raw prompt cache key in shape logs), ``payload`` (downstream request
@@ -445,13 +445,13 @@ class Settings(BaseSettings):
     # unset trusts ``127.0.0.1``, empty trusts no peer, ``*`` trusts every
     # peer, anything else is a comma-separated host/network list. The bare
     # ``FORWARDED_ALLOW_IPS`` env name stays authoritative for compatibility
-    # with Uvicorn deployments; ``CODEX_LB_FORWARDED_ALLOW_IPS`` is the
+    # with Uvicorn deployments; ``SWISSAI_LB_FORWARDED_ALLOW_IPS`` is the
     # prefixed alias. This governs ``scope["client"]``/scheme projection only;
     # ``firewall_trusted_proxy_cidrs`` governs firewall and auth client
     # resolution from the raw socket peer.
     forwarded_allow_ips: str | None = Field(
         default=None,
-        validation_alias=AliasChoices("FORWARDED_ALLOW_IPS", "CODEX_LB_FORWARDED_ALLOW_IPS"),
+        validation_alias=AliasChoices("FORWARDED_ALLOW_IPS", "SWISSAI_LB_FORWARDED_ALLOW_IPS"),
     )
     dashboard_auth_mode: DashboardAuthMode = DashboardAuthMode.STANDARD
     # T1 (topology). Last link of the ``dashboard_auth_mode`` trust chain:
@@ -600,7 +600,7 @@ class Settings(BaseSettings):
         if normalized is not None:
             return normalized
         logger.warning(
-            "CODEX_LB_THREAD_CACHE_IDENTITY_MODE=%r is not a known mode; using %r",
+            "SWISSAI_LB_THREAD_CACHE_IDENTITY_MODE=%r is not a known mode; using %r",
             value,
             THREAD_CACHE_IDENTITY_MODE_DEFAULT,
         )
@@ -807,7 +807,7 @@ class Settings(BaseSettings):
         # reliable for shared caps: there is no portable per-worker index, and a
         # standard uvicorn/gunicorn multi-worker launch inherits the SAME
         # environment into every child, so the workers cannot self-partition.
-        # ``CODEX_LB_WORKERS_PER_INSTANCE`` is therefore not a setting (the only
+        # ``SWISSAI_LB_WORKERS_PER_INSTANCE`` is therefore not a setting (the only
         # accepted value is the default, 1) but a startup guard: an explicit
         # declaration of anything else fails fast rather than silently
         # over-admitting.

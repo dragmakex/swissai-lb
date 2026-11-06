@@ -13,6 +13,7 @@ from app.core.auth.dependencies import (
     set_dashboard_error_format,
     validate_dashboard_session,
 )
+from app.core.shutdown import is_control_plane_task_admission_open, wait_for_tasks_to_drain
 from app.db.session import get_session
 from app.modules.telemetry.consent import ResolvedConsent, TelemetryConsentStore
 from app.modules.telemetry.schemas import (
@@ -33,6 +34,10 @@ router = APIRouter(
     tags=["dashboard"],
     dependencies=[Depends(validate_dashboard_session), Depends(set_dashboard_error_format)],
 )
+
+
+async def drain_opt_out_tasks(timeout_seconds: float) -> bool:
+    return not await wait_for_tasks_to_drain(_OPT_OUT_TASKS, timeout_seconds)
 
 
 @router.get("/telemetry", response_model=TelemetryConsentResponse)
@@ -59,7 +64,7 @@ async def update_telemetry_consent(
     store = TelemetryConsentStore(session)
     previous = await store.resolve()
     consent = await store.set_decision(payload.enabled)
-    if previous.active and not consent.active:
+    if previous.active and not consent.active and is_control_plane_task_admission_open():
         try:
             identity = await store.get_or_create_identity()
             task = asyncio.create_task(

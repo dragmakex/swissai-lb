@@ -2107,7 +2107,7 @@ def configured_upstream_stream_transport(dashboard_settings: Any) -> str:
     """Return the operator-configured upstream stream transport.
 
     The dashboard row is the only source. The legacy ``"default"`` sentinel
-    (which used to defer to the removed ``CODEX_LB_UPSTREAM_STREAM_TRANSPORT``
+    (which used to defer to the removed ``SWISSAI_LB_UPSTREAM_STREAM_TRANSPORT``
     env var) and any unknown value resolve to ``"auto"`` so a settings-cache
     snapshot taken before the data migration ran behaves like the migrated row.
     """

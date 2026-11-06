@@ -193,7 +193,7 @@ export const DashboardSettingsSchema = z
     proxyRequestBudgetSeconds: z.number().optional().default(600),
     compactRequestBudgetSeconds: z.number().optional().default(180),
     transcriptionRequestBudgetSeconds: z.number().optional().default(120),
-    streamIdleTimeoutSeconds: z.number().optional().default(7200),
+    streamIdleTimeoutSeconds: z.number().optional().default(300),
     proxyDownstreamWebsocketIdleTimeoutSeconds: z.number().optional().default(120),
     sseKeepaliveIntervalSeconds: z.number().optional().default(10),
     // M1 stream/bridge budgets: effective values, same contract as the C2-1
@@ -497,7 +497,7 @@ export const UpstreamProxyAdminSchema = z.object({
 
 // M4 model catalogue: per-model context window overrides. `source` is
 // "dashboard" when a dashboard row exists for the slug and "env" when only the
-// CODEX_LB_MODEL_CONTEXT_WINDOW_OVERRIDES entry applies; `envValue` is that
+// SWISSAI_LB_MODEL_CONTEXT_WINDOW_OVERRIDES entry applies; `envValue` is that
 // entry (null when the environment has none).
 export const ModelContextWindowOverrideSchema = z.object({
   slug: z.string().min(1),

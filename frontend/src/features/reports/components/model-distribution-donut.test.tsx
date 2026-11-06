@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import userEvent from "@testing-library/user-event";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
@@ -106,7 +105,7 @@ describe("ModelDistributionDonut", () => {
     expect(screen.getByTestId("model-distribution-legend-4")).toBeInTheDocument();
   });
 
-  it("shows the total label and compact cost total in the donut center by default", () => {
+  it("shows the total request count instead of inferring SwissAI cost", () => {
     render(
       <ModelDistributionDonut
         data={[
@@ -117,10 +116,10 @@ describe("ModelDistributionDonut", () => {
     );
 
     expect(screen.getByTestId("model-distribution-center-label")).toHaveTextContent("Total");
-    expect(screen.getByTestId("model-distribution-center-value")).toHaveTextContent("$1.43K");
+    expect(screen.getByTestId("model-distribution-center-value")).toHaveTextContent("12");
   });
 
-  it("pads legend value cells to the longest formatted cost", () => {
+  it("pads legend value cells to the longest formatted request count", () => {
     render(
       <ModelDistributionDonut
         data={[
@@ -130,17 +129,17 @@ describe("ModelDistributionDonut", () => {
       />,
     );
 
-    const smallCostLegendValue = screen.getAllByText("$42.02").at(-1);
-    const largeCostLegendValue = screen.getAllByText("$128.55").at(-1);
+    const smallCostLegendValue = screen.getAllByText(/^2$/).at(-1);
+    const largeCostLegendValue = screen.getAllByText(/^10$/).at(-1);
 
     expect(smallCostLegendValue).toBeDefined();
     expect(largeCostLegendValue).toBeDefined();
     // jsdom 30's getComputedStyle converts lengths to px, so assert the raw inline style
-    expect(smallCostLegendValue?.style.minWidth).toBe("7ch");
-    expect(largeCostLegendValue?.style.minWidth).toBe("7ch");
+    expect(smallCostLegendValue?.style.minWidth).toBe("2ch");
+    expect(largeCostLegendValue?.style.minWidth).toBe("2ch");
   });
 
-  it("defaults to cost mode without rendering a donut tooltip", () => {
+  it("does not offer a fabricated cost mode", () => {
     render(
       <ModelDistributionDonut
         data={[
@@ -150,17 +149,13 @@ describe("ModelDistributionDonut", () => {
       />,
     );
 
-    expect(screen.getByRole("button", { name: /^cost$/i })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByRole("button", { name: /^req$/i })).toHaveAttribute("aria-pressed", "false");
-    expect(screen.getByTestId("model-distribution-center-value")).toHaveTextContent("$60.05");
-    expect(screen.getByText("$18.03")).toBeInTheDocument();
-    expect(screen.getByTestId("model-distribution-pie")).toHaveAttribute("data-key", "costUsd");
-    expect(screen.queryByText(/^Cost$/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^cost$/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/\$/)).not.toBeInTheDocument();
+    expect(screen.getByTestId("model-distribution-center-value")).toHaveTextContent("10");
+    expect(screen.getByTestId("model-distribution-pie")).toHaveAttribute("data-key", "requests");
   });
 
-  it("switches to request mode for slices, legend values, and percentages without rendering a donut tooltip", async () => {
-    const user = userEvent.setup();
-
+  it("uses requests for slices, legend values and percentages", () => {
     render(
       <ModelDistributionDonut
         data={[
@@ -169,22 +164,16 @@ describe("ModelDistributionDonut", () => {
         ]}
       />,
     );
-
-    await user.click(screen.getByRole("button", { name: /^req$/i }));
 
     expect(screen.getByText("20.0%")).toBeInTheDocument();
     expect(screen.getByText("80.0%")).toBeInTheDocument();
     expect(screen.getByText(/^8$/)).toBeInTheDocument();
     expect(screen.getByTestId("model-distribution-center-value")).toHaveTextContent("10");
     expect(screen.getByTestId("model-distribution-pie")).toHaveAttribute("data-key", "requests");
-    expect(screen.getByRole("button", { name: /^cost$/i })).toHaveAttribute("aria-pressed", "false");
-    expect(screen.getByRole("button", { name: /^req$/i })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.queryByText(/^Requests$/)).not.toBeInTheDocument();
+    expect(screen.getByText(/^Requests$/)).toBeInTheDocument();
   });
 
-  it("uses compact request totals in the center and legend when request mode is active", async () => {
-    const user = userEvent.setup();
-
+  it("uses compact request totals in the center and legend", () => {
     render(
       <ModelDistributionDonut
         data={[
@@ -193,8 +182,6 @@ describe("ModelDistributionDonut", () => {
         ]}
       />,
     );
-
-    await user.click(screen.getByRole("button", { name: /^req$/i }));
 
     expect(screen.getByTestId("model-distribution-center-value")).toHaveTextContent("1.5B");
     expect(screen.getByText("500M")).toBeInTheDocument();

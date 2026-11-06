@@ -1758,7 +1758,7 @@ def test_run_upgrade_backfills_additional_usage_quota_key_from_configured_regist
         encoding="utf-8",
     )
 
-    monkeypatch.setenv("CODEX_LB_ADDITIONAL_QUOTA_REGISTRY_FILE", str(registry_path))
+    monkeypatch.setenv("SWISSAI_LB_ADDITIONAL_QUOTA_REGISTRY_FILE", str(registry_path))
     get_settings.cache_clear()
     clear_additional_quota_registry_cache()
 
@@ -1881,7 +1881,7 @@ def test_run_upgrade_rejects_duplicate_additional_quota_aliases_in_registry(
         encoding="utf-8",
     )
 
-    monkeypatch.setenv("CODEX_LB_ADDITIONAL_QUOTA_REGISTRY_FILE", str(registry_path))
+    monkeypatch.setenv("SWISSAI_LB_ADDITIONAL_QUOTA_REGISTRY_FILE", str(registry_path))
     get_settings.cache_clear()
     clear_additional_quota_registry_cache()
 

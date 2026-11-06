@@ -1,6 +1,9 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
+import { http, HttpResponse } from "msw";
+import { createModelSource } from "@/test/mocks/factories";
+import { server } from "@/test/mocks/server";
 
 import App from "@/App";
 import { renderWithProviders } from "@/test/utils";
@@ -29,7 +32,7 @@ describe("api keys flow integration", () => {
     expect(createButton).toBeInTheDocument();
     await user.click(createButton);
     await user.type(screen.getByLabelText("Name"), createdName);
-    await user.click(screen.getByRole("button", { name: "Create" }));
+    await user.click(screen.getByRole("button", { name: "Save client key" }));
 
     const createdDialog = await screen.findByRole("dialog", { name: "API key created" });
     expect(screen.getByText(/sk-test-generated/i)).toBeInTheDocument();
@@ -48,7 +51,7 @@ describe("api keys flow integration", () => {
     const nameInput = await screen.findByLabelText("Name");
     await user.clear(nameInput);
     await user.type(nameInput, updatedName);
-    await user.click(screen.getByRole("button", { name: "Save" }));
+    await user.click(screen.getByRole("button", { name: "Save client key" }));
 
     const updatedRow = getParentRow(await screen.findByText(updatedName));
 
@@ -67,18 +70,22 @@ describe("api keys flow integration", () => {
     });
   });
 
-  it("creates an api key with assigned accounts", async () => {
+  it("creates a client key scoped to an allowed SwissAI key", async () => {
     const user = userEvent.setup();
+    server.use(http.get("/api/model-sources/", () => HttpResponse.json({ sources: [
+      createModelSource({ id: "sak_fixture", name: "Research SwissAI key" }),
+    ] })));
 
     window.history.pushState({}, "", "/settings");
     renderWithProviders(<App />);
 
     await user.click(await screen.findByRole("button", { name: "Create key" }));
     await user.type(screen.getByLabelText("Name"), "Scoped Integration Key");
-    await user.click(await screen.findByRole("button", { name: "All accounts" }));
-    await user.click(screen.getByRole("menuitemcheckbox", { name: /primary@example\.com/i }));
+    await user.click(screen.getByRole("switch", { name: "Restrict allowed SwissAI keys" }));
+    await user.click(await screen.findByRole("button", { name: "No upstream keys selected" }));
+    await user.click(await screen.findByRole("menuitemcheckbox", { name: /Research SwissAI key/i }));
     await user.keyboard("{Escape}");
-    await user.click(screen.getByRole("button", { name: "Create" }));
+    await user.click(screen.getByRole("button", { name: "Save client key" }));
 
     const createdDialog = await screen.findByRole("dialog", { name: "API key created" });
     const closeCandidates = within(createdDialog).getAllByRole("button", {
@@ -93,7 +100,8 @@ describe("api keys flow integration", () => {
     await openRowActions(user, createdRow);
     await user.click(await screen.findByRole("menuitem", { name: /Edit/ }));
 
-    expect(await screen.findByRole("button", { name: "1 account selected" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "1 selected" })).toBeInTheDocument();
+    expect(screen.getByRole("switch", { name: "Restrict allowed SwissAI keys" })).toBeChecked();
   });
 
   it("displays the current api key list on settings", async () => {
@@ -119,7 +127,7 @@ describe("api keys flow integration", () => {
     expect(within(readOnlyRow).getByText(/12\.5K tok/)).toBeInTheDocument();
     expect(within(readOnlyRow).getByText(/2\.2K cached/)).toBeInTheDocument();
     expect(within(readOnlyRow).getByText(/42 req/)).toBeInTheDocument();
-    expect(within(readOnlyRow).getByText(/\$0\.42/)).toBeInTheDocument();
+    expect(within(readOnlyRow).queryByText(/\$0\.42/)).not.toBeInTheDocument();
     expect(within(readOnlyRow).getByText("Never")).toBeInTheDocument();
     expect(within(readOnlyRow).getByText("Disabled")).toBeInTheDocument();
   });
@@ -137,5 +145,7 @@ describe("api keys flow integration", () => {
 
     // Edit dialog should show current usage section
     expect(await screen.findByText("Current usage")).toBeInTheDocument();
+    const dialog = screen.getByRole("dialog", { name: "Edit client key" });
+    expect(within(dialog).getByRole("progressbar")).toHaveAttribute("aria-valuenow", "12.5");
   });
 });

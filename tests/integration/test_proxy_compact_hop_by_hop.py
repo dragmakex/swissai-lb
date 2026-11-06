@@ -78,7 +78,6 @@ async def test_proxy_compact_route_strips_chunked_and_connection_headers(async_c
         yield session
 
     monkeypatch.setattr(proxy_client_module, "lease_http_session", lease_session)
-    monkeypatch.setattr(proxy_client_module, "discover_native_egress_client", lambda: None)
     native_user_agent = "codex_exec/0.151.0 (Ubuntu 24.4.0; x86_64) dumb"
     response = await async_client.post(
         "/backend-api/codex/responses/compact",

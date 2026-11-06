@@ -1485,7 +1485,7 @@ class _ReleasableStreamResponse:
 
 
 class _AcloseOnlyStreamResponse:
-    """Native-egress-shaped: only ``aclose()`` is available."""
+    """Async response wrapper: only ``aclose()`` is available."""
 
     status_code = 200
     headers = {"content-type": "text/event-stream"}
@@ -1527,7 +1527,7 @@ def _install_owned_codex_client(monkeypatch: pytest.MonkeyPatch, client: _OwnedC
     # No codex_client is passed, so the routed branch builds and owns its own
     # per-stream client exactly like production does.
     monkeypatch.setattr(proxy_module, "create_codex_session", lambda: None)
-    monkeypatch.setattr(proxy_module, "CodexClient", lambda session, *, native_egress_client=None: client)
+    monkeypatch.setattr(proxy_module, "CodexClient", lambda session: client)
 
 
 def _routed_stream(route: ResolvedUpstreamRoute, *, raise_for_status: bool = False):
@@ -1733,7 +1733,6 @@ async def test_stream_responses_python_http_prepares_only_consumed_json(
         monkeypatch.setattr(proxy_module, "MAX_SSE_EVENT_BYTES", 2 * 1024 * 1024)
     else:
         assert len(expected_body) < proxy_module._ws_transport_payload_budget_bytes()
-    monkeypatch.setattr(proxy_module, "discover_native_egress_client", lambda: None)
     # Observe only this owning module's JSON calls, leaving aiohttp's real
     # request serializer and all preparation/stream code unchanged.
     preparation_json = MagicMock(wraps=json)

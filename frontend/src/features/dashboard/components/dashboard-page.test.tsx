@@ -322,7 +322,7 @@ describe("DashboardPage", () => {
 
     expect(screen.queryByTestId("dashboard-skeleton")).not.toBeInTheDocument();
     expect(screen.getByTestId("stats-grid")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Accounts" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "SwissAI pool health" })).toBeInTheDocument();
     const requestLogsSection = screen.getByRole("heading", { name: "Request Logs" }).closest("section");
 
     expect(requestLogsSection).not.toBeNull();
@@ -571,13 +571,13 @@ describe("DashboardPage", () => {
 
     await user.click(screen.getByRole("button", { name: "Columns (12)" }));
     expect(screen.getByText("Visible columns")).toBeInTheDocument();
-    await user.click(screen.getByRole("menuitemcheckbox", { name: "Plan" }));
+    await user.click(screen.getByRole("menuitemcheckbox", { name: "Route" }));
 
     expect(screen.getByRole("menu", { name: "Columns (11)" })).toBeInTheDocument();
     const selectedProps = recentRequestsTableSpy.mock.lastCall?.[0] as
       | RecentRequestsTableProps
       | undefined;
-    expect(selectedProps?.visibleColumns).not.toContain("plan");
+    expect(selectedProps?.visibleColumns).not.toContain("route");
 
     act(() => {
       selectedProps?.onColumnWidthChange?.("account", 240);
@@ -602,66 +602,40 @@ describe("DashboardPage", () => {
     ).toBeNull();
   });
 
-  it("renders the account summary line in the Accounts header using overview accounts", () => {
-    const overview = mockReadyDashboard();
-
+  it("shows SwissAI pool health instead of an OAuth-account summary", () => {
+    mockReadyDashboard();
     renderWithProviders(<DashboardPage />);
-
-    const accountsHeader = screen.getByRole("heading", { name: "Accounts" }).parentElement;
-
-    expect(accountsHeader).not.toBeNull();
-    expect(within(accountsHeader as HTMLElement).getByTestId("account-summary-line")).toHaveTextContent(
-      "Summary for 2 accounts",
-    );
-    expect(accountSummaryLineSpy).toHaveBeenCalledWith(overview.accounts);
+    expect(screen.getByRole("region", { name: "SwissAI pool health" })).toBeInTheDocument();
+    expect(accountSummaryLineSpy).not.toHaveBeenCalled();
+    expect(screen.queryByRole("heading", { name: "Accounts" })).not.toBeInTheDocument();
   });
 
-  it("defaults the Accounts section to card view", () => {
-    const overview = mockReadyDashboard();
-
+  it("does not render retired subscription cards with the historical card preference", () => {
+    mockReadyDashboard();
     renderWithProviders(<DashboardPage />);
-
-    expect(screen.getByTestId("account-cards")).toHaveTextContent("Cards for 2 accounts");
-    expect(screen.queryByTestId("account-list")).not.toBeInTheDocument();
-    expect(accountCardsSpy).toHaveBeenCalledWith(overview.accounts);
-    expect(screen.getByRole("radio", { name: "View accounts as cards" })).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByRole("region", { name: "SwissAI pool health" })).toBeInTheDocument();
+    expect(accountCardsSpy).not.toHaveBeenCalled();
+    expect(screen.queryByRole("radio", { name: "View accounts as cards" })).not.toBeInTheDocument();
   });
 
-  it("switches the Accounts section to list view", async () => {
-    const user = userEvent.setup();
-    const overview = mockReadyDashboard();
-
+  it("keeps pool health visible when an old card/list preference changes", () => {
+    mockReadyDashboard();
     renderWithProviders(<DashboardPage />);
-
-    await user.click(screen.getByRole("radio", { name: "View accounts as list" }));
-
-    expect(screen.getByTestId("account-list")).toHaveTextContent("List for 2 accounts");
-    expect(screen.queryByTestId("account-cards")).not.toBeInTheDocument();
-    expect(accountListSpy).toHaveBeenCalledWith({ accounts: overview.accounts, sort: null });
-    expect(useDashboardPreferencesStore.getState().accountViewMode).toBe("list");
+    act(() => useDashboardPreferencesStore.setState({ accountViewMode: "list" }));
+    expect(screen.getByRole("region", { name: "SwissAI pool health" })).toBeInTheDocument();
+    expect(accountListSpy).not.toHaveBeenCalled();
+    expect(accountCardsSpy).not.toHaveBeenCalled();
   });
 
-  it("passes persisted account list sort through and updates it from the list", async () => {
-    const user = userEvent.setup();
-    const overview = mockReadyDashboard();
+  it("does not let a persisted subscription-credit sort affect pool health", () => {
+    mockReadyDashboard();
     useDashboardPreferencesStore.setState({
-      accountBurnrateEnabled: true,
-      accountViewMode: "list",
-      accountListSort: { key: "quota", direction: "asc" },
-      initialized: true,
+      accountViewMode: "list", accountListSort: { key: "quota", direction: "asc" },
     });
-
     renderWithProviders(<DashboardPage />);
-
-    expect(screen.getByTestId("account-list")).toHaveTextContent("List for 2 accounts");
-    expect(accountListSpy).toHaveBeenCalledWith({
-      accounts: overview.accounts,
-      sort: { key: "quota", direction: "asc" },
-    });
-
-    await user.click(screen.getByTestId("account-list"));
-
-    expect(useDashboardPreferencesStore.getState().accountListSort).toEqual({ key: "purchasedCredits", direction: "desc" });
+    expect(screen.getByRole("region", { name: "SwissAI pool health" })).toBeInTheDocument();
+    expect(accountListSpy).not.toHaveBeenCalled();
+    expect(useDashboardPreferencesStore.getState().accountListSort).toEqual({ key: "quota", direction: "asc" });
   });
 
   it("renders conversation badge between Statuses and Reset in filters", () => {
@@ -791,7 +765,7 @@ describe("DashboardPage", () => {
     expect(codeElements).toHaveLength(3);
     expect(codeElements[0].textContent).toBe("conv_page_summary");
     expect(codeElements[1].textContent).toBe("42");
-    expect(codeElements[2].textContent).toBe("$3.14");
+    expect(codeElements[2].textContent).toBe("Unknown SwissAI pricing");
 
     // Prove summary is between filters and table via DOM order
     const requestLogsSection = screen.getByRole("heading", { name: "Request Logs" }).closest("section");
@@ -890,7 +864,7 @@ describe("DashboardPage", () => {
     expect(summaryEl.textContent).toMatch(/Error/i);
     expect(summaryEl.textContent).toMatch(/"test_search"/);
     // Safe fallback labels used when options missing
-    expect(summaryEl.textContent).toMatch(/Accounts/);
+    expect(summaryEl.textContent).toMatch(/SwissAI keys/);
     expect(summaryEl.textContent).toMatch(/API Keys/);
   });
 

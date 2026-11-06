@@ -1144,7 +1144,6 @@ async def test_backend_files_routed_transport_failover(async_client, monkeypatch
     import aiohttp
     from aiohttp.client_reqrep import ConnectionKey
 
-    import app.core.clients.codex as codex_module
     import app.core.clients.files as files_module
     from app.core.upstream_proxy import ResolvedProxyEndpoint, ResolvedUpstreamRoute
 
@@ -1195,7 +1194,6 @@ async def test_backend_files_routed_transport_failover(async_client, monkeypatch
     async def fresh(self, account, **kwargs):
         return account
 
-    monkeypatch.setattr(codex_module, "discover_native_egress_client", lambda: None)
     monkeypatch.setattr(files_module, "create_codex_session", Session)
     monkeypatch.setattr(proxy_module.ProxyService, "_resolve_upstream_route_for_account", route)
     monkeypatch.setattr(proxy_module.ProxyService, "_ensure_fresh", fresh)
@@ -1234,7 +1232,6 @@ async def test_backend_files_late_finalize_connect_failure_stays_with_first_acco
     import aiohttp
     from aiohttp.client_reqrep import ConnectionKey
 
-    import app.core.clients.codex as codex_module
     import app.core.clients.files as files_module
     from app.core.upstream_proxy import ResolvedProxyEndpoint, ResolvedUpstreamRoute
     from app.dependencies import get_proxy_service_for_app
@@ -1268,7 +1265,6 @@ async def test_backend_files_late_finalize_connect_failure_stays_with_first_acco
     async def fresh(self, account, **kwargs):
         return account
 
-    monkeypatch.setattr(codex_module, "discover_native_egress_client", lambda: None)
     monkeypatch.setattr(files_module, "create_codex_session", Session)
     monkeypatch.setattr(files_module, "_FILE_FINALIZE_POLL_DELAY_SECONDS", 0)
     monkeypatch.setattr(proxy_module.ProxyService, "_resolve_upstream_route_for_account", route)

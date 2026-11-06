@@ -59,7 +59,7 @@ def test_consent_precedence_and_default_activation() -> None:
     undecided = resolve_consent(None, "undecided")
     assert undecided.state == "undecided"
     assert undecided.source == "default"
-    assert undecided.active is True
+    assert undecided.active is False
 
 
 @pytest.mark.asyncio
@@ -87,7 +87,7 @@ async def test_random_uuid_v4_identity_is_persisted_and_regenerated_after_deleti
 @pytest.mark.asyncio
 async def test_disabled_scheduler_tick_makes_zero_sender_calls(db_setup, monkeypatch) -> None:
     del db_setup
-    monkeypatch.delenv("CODEX_LB_TELEMETRY_ENABLED", raising=False)
+    monkeypatch.delenv("SWISSAI_LB_TELEMETRY_ENABLED", raising=False)
     get_settings.cache_clear()
     async with SessionLocal() as session:
         store = TelemetryConsentStore(session)
@@ -103,7 +103,7 @@ async def test_disabled_scheduler_tick_makes_zero_sender_calls(db_setup, monkeyp
 @pytest.mark.asyncio
 async def test_enabled_scheduler_snapshot_declares_enabled_consent(db_setup, monkeypatch) -> None:
     del db_setup
-    monkeypatch.delenv("CODEX_LB_TELEMETRY_ENABLED", raising=False)
+    monkeypatch.delenv("SWISSAI_LB_TELEMETRY_ENABLED", raising=False)
     get_settings.cache_clear()
     async with SessionLocal() as session:
         store = TelemetryConsentStore(session)
@@ -152,32 +152,34 @@ async def test_main_lifespan_constructs_starts_and_stops_telemetry_scheduler(app
 
 
 @pytest.mark.asyncio
-async def test_scheduler_sends_startup_and_interval_snapshots_with_one_undecided_notice(
+async def test_scheduler_sends_nothing_on_startup_or_interval_until_consent(
     db_setup,
     monkeypatch,
     caplog,
 ) -> None:
     del db_setup
-    monkeypatch.delenv("CODEX_LB_TELEMETRY_ENABLED", raising=False)
+    monkeypatch.delenv("SWISSAI_LB_TELEMETRY_ENABLED", raising=False)
     get_settings.cache_clear()
     assert TELEMETRY_INTERVAL_SECONDS == 24 * 60 * 60
 
     sender = AsyncMock()
     scheduler = TelemetryScheduler(sender=sender, interval_seconds=0.01)
+    tick = AsyncMock(wraps=scheduler._tick)
+    monkeypatch.setattr(TelemetryScheduler, "_tick", tick)
     with caplog.at_level(logging.INFO, logger="app.modules.telemetry.scheduler"):
         await scheduler.start()
         for _ in range(50):
-            if sender.send_snapshot.await_count >= 2:
+            if tick.await_count >= 2:
                 break
             await asyncio.sleep(0.01)
         await scheduler.stop()
 
-    assert sender.send_snapshot.await_count >= 2
-    assert all(call.args[0].consent == "undecided" for call in sender.send_snapshot.await_args_list)
+    assert tick.await_count >= 2
+    sender.send_snapshot.assert_not_awaited()
     notices = [
-        record.getMessage() for record in caplog.records if "Anonymous telemetry is active" in record.getMessage()
+        record.getMessage() for record in caplog.records if "telemetry awaits operator consent" in record.getMessage()
     ]
     assert len(notices) == 1
     assert "https://soju06.github.io/codex-lb/telemetry/" in notices[0]
-    assert "CODEX_LB_TELEMETRY_ENABLED=false" in notices[0]
+    assert "SWISSAI_LB_TELEMETRY_ENABLED=true" in notices[0]
     assert scheduler._task is None

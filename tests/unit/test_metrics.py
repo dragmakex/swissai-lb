@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import builtins
 import importlib
 import sys
 import types
@@ -111,15 +110,8 @@ def _load_metrics_modules(
     if prometheus_client_module is not None:
         monkeypatch.setitem(sys.modules, "prometheus_client", prometheus_client_module)
     else:
-        monkeypatch.delitem(sys.modules, "prometheus_client", raising=False)
-        real_import = builtins.__import__
-
-        def _missing_prometheus_import(name, globals=None, locals=None, fromlist=(), level=0):
-            if name == "prometheus_client":
-                raise ImportError("prometheus_client is not installed")
-            return real_import(name, globals, locals, fromlist, level)
-
-        monkeypatch.setattr(builtins, "__import__", _missing_prometheus_import)
+        # import_module bypasses __import__; a None entry simulates absence for both import paths.
+        monkeypatch.setitem(sys.modules, "prometheus_client", None)
 
     prometheus_module = importlib.import_module("app.core.metrics.prometheus")
     middleware_module = importlib.import_module("app.core.metrics.middleware")

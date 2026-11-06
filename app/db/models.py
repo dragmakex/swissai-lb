@@ -477,6 +477,7 @@ class RequestLog(Base):
         Index("idx_logs_useragent_group", "useragent_group"),
         Index("idx_logs_conversation_id", "conversation_id"),
         Index("idx_logs_client_ip", "client_ip"),
+        Index("ix_logs_source_requested", "model_source_id", "requested_at"),
     )
 
     sticky_key_source: Mapped[str | None] = mapped_column(String, nullable=True)
@@ -494,6 +495,8 @@ class RequestLog(Base):
         nullable=True,
     )
     model_source_kind: Mapped[str | None] = mapped_column(String, nullable=True)
+    route: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    stream: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     api_key_id: Mapped[str | None] = mapped_column(String, nullable=True)
     session_id: Mapped[str | None] = mapped_column(String, nullable=True)
     request_id: Mapped[str] = mapped_column(String, nullable=False)
@@ -1509,7 +1512,7 @@ class DashboardSettings(Base):
         nullable=False,
     )
     # M3 codex prewarm: dashboard-managed Codex HTTP-bridge session prewarm.
-    # NULL inherits the deprecated ``CODEX_LB_*`` env alias (then the code
+    # NULL inherits the deprecated ``SWISSAI_LB_*`` env alias (then the code
     # default, off); a non-NULL value is dashboard-owned.
     http_responses_session_bridge_codex_prewarm_enabled: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     # end M3 codex prewarm
@@ -1635,26 +1638,26 @@ class DashboardSettings(Base):
         Integer,
         nullable=True,
     )
-    # C2-3 resilience toggles: NULL inherits the deprecated ``CODEX_LB_*`` env
+    # C2-3 resilience toggles: NULL inherits the deprecated ``SWISSAI_LB_*`` env
     # alias (then the code default); a non-NULL value is dashboard-owned.
     soft_drain_enabled: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     deterministic_failover_enabled: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     circuit_breaker_enabled: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
-    # M2 background jobs: NULL inherits the deprecated ``CODEX_LB_*`` env alias
+    # M2 background jobs: NULL inherits the deprecated ``SWISSAI_LB_*`` env alias
     # (then the code default); schedulers read the value at every cycle entry.
     auth_guardian_enabled: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     automations_scheduler_enabled: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     rate_limit_reset_credits_refresh_enabled: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     # end M2 background jobs
     # M5 conversation archive: NULL inherits the deprecated
-    # ``CODEX_LB_CONVERSATION_ARCHIVE_ENABLED`` env alias (then the code
+    # ``SWISSAI_LB_CONVERSATION_ARCHIVE_ENABLED`` env alias (then the code
     # default, off); a non-NULL value is dashboard-owned.
     conversation_archive_enabled: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     # end M5 conversation archive
     # R2 spool retention: how long the durable HTTP-bridge operation spool --
     # raw request payloads and their spooled response events -- is kept before
     # the retention sweep deletes it. NULL inherits the deprecated
-    # ``CODEX_LB_HTTP_RESPONSES_SESSION_BRIDGE_OPERATION_SPOOL_RETENTION_SECONDS``
+    # ``SWISSAI_LB_HTTP_RESPONSES_SESSION_BRIDGE_OPERATION_SPOOL_RETENTION_SECONDS``
     # env alias (then the code default, 7 days); a non-NULL value is
     # dashboard-owned and must stay at or above the replay floor.
     http_responses_session_bridge_operation_spool_retention_seconds: Mapped[float | None] = mapped_column(
@@ -1682,7 +1685,7 @@ class DashboardSettings(Base):
 class ModelContextWindowOverride(Base):
     """One dashboard-stored context window override for a model slug.
 
-    A row wins over the ``CODEX_LB_MODEL_CONTEXT_WINDOW_OVERRIDES`` entry for
+    A row wins over the ``SWISSAI_LB_MODEL_CONTEXT_WINDOW_OVERRIDES`` entry for
     the same slug; slugs without a row inherit the environment entry (or have
     no override). The migration never copies the environment into rows.
     """
@@ -3098,3 +3101,61 @@ Index(
     AdditionalUsageHistory.used_percent.desc(),
     AdditionalUsageHistory.id.desc(),
 )
+
+
+class SwissAIKeyState(Base):
+    """Provider facts for an encrypted upstream ModelSource credential."""
+
+    __tablename__ = "swissai_key_state"
+    source_id: Mapped[str] = mapped_column(String, ForeignKey("model_sources.id", ondelete="CASCADE"), primary_key=True)
+    fingerprint: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    key_prefix: Mapped[str] = mapped_column(String(32), nullable=False)
+    invalid_at: Mapped[datetime | None] = mapped_column(DateTime)
+    cooldown_until: Mapped[datetime | None] = mapped_column(DateTime)
+    failure_reason: Mapped[str | None] = mapped_column(String(80))
+    failures: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"), nullable=False)
+    generation: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"), nullable=False)
+    last_selected_at: Mapped[datetime | None] = mapped_column(DateTime)
+    last_success_at: Mapped[datetime | None] = mapped_column(DateTime)
+    last_failure_at: Mapped[datetime | None] = mapped_column(DateTime)
+
+
+class SwissAILease(Base):
+    __tablename__ = "swissai_leases"
+    __table_args__ = (Index("ix_swissai_leases_source_expiry", "source_id", "expires_at"),)
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    source_id: Mapped[str] = mapped_column(String, ForeignKey("swissai_key_state.source_id"), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+
+class SwissAIAttempt(Base):
+    __tablename__ = "swissai_attempts"
+    __table_args__ = (
+        Index("ix_swissai_attempts_request", "request_id"),
+        Index("ix_swissai_attempts_started", "started_at"),
+    )
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    request_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    source_id: Mapped[str | None] = mapped_column(String)
+    key_label: Mapped[str] = mapped_column(String(128), nullable=False)
+    attempt_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    started_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime)
+    status_code: Mapped[int | None] = mapped_column(Integer)
+    failure_reason: Mapped[str | None] = mapped_column(String(80))
+    downstream_visible: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false(), nullable=False)
+
+
+class SwissAIContinuation(Base):
+    __tablename__ = "swissai_continuations"
+    __table_args__ = (Index("ix_swissai_continuations_created", "created_at"),)
+    id: Mapped[str] = mapped_column(String(512), primary_key=True)
+    source_id: Mapped[str] = mapped_column(String, nullable=False)
+    generation: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+
+class SwissAIRuntime(Base):
+    __tablename__ = "swissai_runtime"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    value: Mapped[str] = mapped_column(Text, nullable=False)

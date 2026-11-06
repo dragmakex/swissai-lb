@@ -43,13 +43,15 @@ describe("ApiKeysOverview", () => {
     expect(screen.getByTestId("api-keys-overview-stat-active-keys")).toHaveTextContent("1");
     expect(screen.getByTestId("api-keys-overview-stat-used-keys")).toHaveTextContent("2");
     expect(screen.getByTestId("api-keys-overview-stat-lifetime-requests")).toHaveTextContent("420");
-    expect(screen.getByTestId("api-keys-overview-stat-lifetime-cost")).toHaveTextContent("$3.50");
+    expect(screen.getByTestId("api-keys-overview-stat-lifetime-cost")).toHaveTextContent("—");
 
-    expect(screen.getByText("Lifetime Cost by API Key")).toBeInTheDocument();
+    expect(screen.queryByText("Lifetime Cost by API Key")).not.toBeInTheDocument();
+    expect(screen.getByText("Requests by client key")).toBeInTheDocument();
     expect(screen.getByText("Lifetime Tokens by API Key")).toBeInTheDocument();
 
-    const costPanel = screen.getByTestId("api-keys-overview-cost-panel");
-    expect(within(costPanel).getByText("Primary key")).toBeInTheDocument();
-    expect(within(costPanel).getByText("Secondary key")).toBeInTheDocument();
+    const requestsPanel = screen.getByTestId("api-keys-overview-requests-panel");
+    expect(within(requestsPanel).getByText("Primary key")).toBeInTheDocument();
+    expect(within(requestsPanel).getByText("Secondary key")).toBeInTheDocument();
+    expect(screen.queryByTestId("api-keys-overview-cost-panel")).not.toBeInTheDocument();
   });
 });

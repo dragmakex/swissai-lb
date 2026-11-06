@@ -1,4 +1,3 @@
-import { useQuery } from "@tanstack/react-query";
 import { ChevronDown, Eye, EyeOff, LogIn, LogOut, Menu, ShieldAlert } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -16,9 +15,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { listAccounts } from "@/features/accounts/api";
 import { hasPermission, useAuthStore } from "@/features/auth/hooks/use-auth";
-import { getSettings } from "@/features/settings/api";
 import { usePrivacyStore } from "@/hooks/use-privacy";
 import { cn } from "@/lib/utils";
 
@@ -59,30 +56,6 @@ export function AppHeader({
   const blurred = usePrivacyStore((s) => s.blurred);
   const togglePrivacy = usePrivacyStore((s) => s.toggle);
   const PrivacyIcon = blurred ? EyeOff : Eye;
-  const { data: accounts = [] } = useQuery({
-    queryKey: ["accounts", "list"],
-    queryFn: listAccounts,
-    select: (data) => data.accounts,
-    refetchInterval: 30_000,
-    refetchIntervalInBackground: false,
-    staleTime: 30_000,
-  });
-  const { data: settings } = useQuery({
-    queryKey: ["settings", "detail"],
-    queryFn: getSettings,
-  });
-  const showResetCreditBadges = settings?.showResetCreditBadges ?? true;
-  const totalAvailableResetCredits = accounts.reduce(
-    (total, account) => total + Math.max(0, account.availableResetCredits ?? 0),
-    0,
-  );
-  const accountsResetBadge = !showResetCreditBadges
-    ? null
-    : totalAvailableResetCredits > 99
-    ? "99+"
-    : totalAvailableResetCredits > 0
-      ? String(totalAvailableResetCredits)
-      : null;
   const privacyLabel = blurred ? t("nav.showEmails") : t("nav.hideEmails");
 
   return (
@@ -102,7 +75,7 @@ export function AppHeader({
             <CodexLogo size={20} className="text-primary" />
           </div>
           <div className="min-w-0">
-            <p className="truncate text-sm font-semibold tracking-tight">Codex LB</p>
+            <p className="truncate text-sm font-semibold tracking-tight">SwissAI LB</p>
           </div>
         </Link>
 
@@ -123,15 +96,10 @@ export function AppHeader({
             >
               <span className="relative inline-flex items-center">
                 {t(item.labelKey)}
-                {item.to === "/accounts" && accountsResetBadge ? (
-                  <span className="absolute -top-2 -right-4 z-10 grid h-4 min-w-[1rem] place-items-center rounded-full bg-primary px-1 text-[10px] font-medium text-primary-foreground">
-                    {accountsResetBadge}
-                  </span>
-                ) : null}
               </span>
             </NavLink>
           ))}
-          <DropdownMenu>
+          {advancedNavItems.length > 0 ? <DropdownMenu>
             <DropdownMenuTrigger
               data-active={advancedActive}
               className={cn(
@@ -153,7 +121,7 @@ export function AppHeader({
                 </DropdownMenuItem>
               ))}
             </DropdownMenuContent>
-          </DropdownMenu>
+          </DropdownMenu> : null}
         </nav>
 
         {/* Actions */}
@@ -218,7 +186,7 @@ export function AppHeader({
                   <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10">
                     <CodexLogo size={16} className="text-primary" />
                   </div>
-                  <span className="text-sm font-semibold">Codex LB</span>
+                  <span className="text-sm font-semibold">SwissAI LB</span>
                 </SheetTitle>
               </SheetHeader>
               <nav className="flex flex-col gap-0.5 px-4 pt-2">
@@ -243,19 +211,16 @@ export function AppHeader({
                         )}
                       >
                         {t(item.labelKey)}
-                        {item.to === "/accounts" && accountsResetBadge ? (
-                          <span className="absolute right-2 top-1 z-10 grid h-5 min-w-[1.25rem] place-items-center rounded-full bg-primary px-1 text-[10px] font-medium text-primary-foreground">
-                            {accountsResetBadge}
-                          </span>
-                        ) : null}
                       </span>
                     )}
                   </NavLink>
                 ))}
-                <div className="my-2 h-px bg-border" />
-                <p className="px-3 pb-1 text-[11px] font-medium tracking-wider text-muted-foreground uppercase">
-                  {t("nav.advanced")}
-                </p>
+                {advancedNavItems.length > 0 ? <>
+                  <div className="my-2 h-px bg-border" />
+                  <p className="px-3 pb-1 text-[11px] font-medium tracking-wider text-muted-foreground uppercase">
+                    {t("nav.advanced")}
+                  </p>
+                </> : null}
                 {advancedNavItems.map((item) => (
                   <NavLink key={item.to} to={item.to} onClick={() => setMobileOpen(false)}>
                     {({ isActive }) => (

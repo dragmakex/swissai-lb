@@ -608,7 +608,7 @@ async def test_create_key_stores_hash_and_prefix() -> None:
         )
     )
 
-    assert re.fullmatch(r"sk-clb-[0-9a-f]{48}", created.key)
+    assert re.fullmatch(r"sk-sailb-[0-9a-f]{48}", created.key)
     assert created.key_prefix == created.key[:15]
     assert created.allowed_models == ["o3-pro"]
     assert created.traffic_class == "foreground"
@@ -1044,7 +1044,7 @@ async def test_update_key_tracks_model_source_scope_after_clear() -> None:
         ),
     )
 
-    assert cleared.source_assignment_scope_enabled is False
+    assert cleared.source_assignment_scope_enabled is True
     assert cleared.assigned_source_ids == []
 
 
@@ -2063,7 +2063,7 @@ async def test_regenerate_key_rotates_hash_and_prefix() -> None:
     row_after = await repo.get_by_id(created.id)
     assert row_after is not None
 
-    assert re.fullmatch(r"sk-clb-[0-9a-f]{48}", regenerated.key)
+    assert re.fullmatch(r"sk-sailb-[0-9a-f]{48}", regenerated.key)
     assert row_after.key_hash != old_hash
     assert row_after.key_prefix != old_prefix
 

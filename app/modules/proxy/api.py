@@ -50,8 +50,8 @@ from app.core.clients.files import FileProxyError
 from app.core.clients.proxy import (
     _SSE_SEPARATOR_OVERLAP,
     CODEX_0150_RESPONSES_WEBSOCKET_WIRE_PROFILE,
-    CODEX_LB_REQUIRED_CAPABILITY_HEADER,
     MAX_SSE_EVENT_BYTES,
+    SWISSAI_LB_REQUIRED_CAPABILITY_HEADER,
     CodexControlRequestPrivacyPolicy,
     CodexControlResponse,
     ProxyResponseError,
@@ -4118,7 +4118,7 @@ def _to_model_list_item(
         {
             "id": slug,
             "created": created,
-            "owned_by": "codex-lb",
+            "owned_by": "swissai-lb",
             "metadata": _to_model_metadata(model, context_window=context_window),
             "api_types": ["chat_completions"],
             "capabilities": _v1_model_capabilities(model, context_window=context_window),
@@ -4262,7 +4262,7 @@ def _to_codex_model_entry(
 async def _effective_context_window_overrides() -> Mapping[str, int]:
     # M4 model catalogue: resolved once per catalog build, outside the per-model
     # loops. Dashboard rows (cached snapshot, settings-namespace invalidation)
-    # win per slug over the deprecated CODEX_LB_MODEL_CONTEXT_WINDOW_OVERRIDES
+    # win per slug over the deprecated SWISSAI_LB_MODEL_CONTEXT_WINDOW_OVERRIDES
     # entry; a slug with neither has no override.
     dashboard = await get_model_context_window_overrides_cache().get()
     return effective_context_window_overrides(dashboard, get_settings().model_context_window_overrides)
@@ -8432,8 +8432,8 @@ def _is_legacy_proxy_auth_override_type_error(exc: TypeError) -> bool:
 
 def _required_capability_values(headers: Mapping[str, str]) -> tuple[str, ...]:
     if isinstance(headers, Headers):
-        return tuple(headers.getlist(CODEX_LB_REQUIRED_CAPABILITY_HEADER))
-    normalized_name = CODEX_LB_REQUIRED_CAPABILITY_HEADER.lower()
+        return tuple(headers.getlist(SWISSAI_LB_REQUIRED_CAPABILITY_HEADER))
+    normalized_name = SWISSAI_LB_REQUIRED_CAPABILITY_HEADER.lower()
     return tuple(value for name, value in headers.items() if name.lower() == normalized_name)
 
 

@@ -15,9 +15,9 @@ def _read(relative_path: str) -> str:
 def test_development_compose_uses_owned_launcher_and_restarts_synced_source() -> None:
     compose = yaml.safe_load(_read("docker-compose.yml"))
     server = compose["services"]["server"]
-    command = server["command"]
-
-    assert command[:3] == ["python", "-m", "app.cli"]
+    assert "command" not in server and "entrypoint" not in server
+    assert 'CMD ["/app/scripts/docker-entrypoint.sh"]' in _read("Dockerfile")
+    assert "exec python -m app.cli" in _read("scripts/docker-entrypoint.sh")
     app_watch = next(item for item in server["develop"]["watch"] if item["path"] == "./app")
     assert app_watch["action"] == "sync+restart"
 
@@ -25,8 +25,7 @@ def test_development_compose_uses_owned_launcher_and_restarts_synced_source() ->
 @pytest.mark.parametrize(
     ("relative_path", "command"),
     [
-        ("README.md", "uv run codex-lb"),
-        ("README.zh-CN.md", "uv run codex-lb"),
+        ("README.md", "uv run swissai-lb"),
         (
             "openspec/specs/responses-api-compat/ops.md",
             ".venv/bin/python -m app.cli --host 127.0.0.1 --port 2460",
@@ -45,17 +44,14 @@ def test_documented_launchers_delegate_to_app_cli(
     [
         ("Dockerfile", 'CMD ["/app/scripts/docker-entrypoint.sh"]'),
         ("scripts/docker-entrypoint.sh", "exec python -m app.cli"),
-        ("Dockerfile.distroless", 'CMD ["python", "/app/scripts/distroless-entrypoint.py"]'),
-        ("scripts/distroless-entrypoint.py", '[sys.executable, "-m", "app.cli"'),
-        ("deploy/helm/codex-lb/templates/deployment.yaml", "            - app.cli\n"),
     ],
 )
 def test_production_launchers_delegate_to_app_cli(relative_path: str, contract: str) -> None:
     assert contract in _read(relative_path)
 
 
-def test_production_compose_does_not_override_the_app_cli_launcher() -> None:
-    server = yaml.safe_load(_read("docker-compose.prod.yml"))["services"]["server"]
+def test_compose_does_not_override_the_app_cli_launcher() -> None:
+    server = yaml.safe_load(_read("docker-compose.yml"))["services"]["server"]
 
     assert "command" not in server
     assert "entrypoint" not in server

@@ -83,9 +83,9 @@ describe("reports date-range flow integration", () => {
       let accountRequests = 0;
 
       server.use(
-        http.get("/api/accounts", () => {
+        http.get("/api/swissai-keys", () => {
           accountRequests += 1;
-          return HttpResponse.json({ accounts: [] });
+          return HttpResponse.json([]);
         }),
         http.get("/api/reports", ({ request }) => {
           reportsRequests.push(new URL(request.url).searchParams);
@@ -179,7 +179,7 @@ describe("reports date-range flow integration", () => {
     },
   );
 
-  it("retries Accounts without refetching either Reports query while the range is inverted", async () => {
+  it("retries SwissAI inventory without refetching either Reports query while the range is inverted", async () => {
     const user = userEvent.setup({ delay: null });
     const referenceDate = new Date();
     const reportsRequests: URLSearchParams[] = [];
@@ -187,7 +187,7 @@ describe("reports date-range flow integration", () => {
     let accountRequests = 0;
 
     server.use(
-      http.get("/api/accounts", () => {
+      http.get("/api/swissai-keys", () => {
         accountRequests += 1;
         return HttpResponse.json(
           {
@@ -242,7 +242,7 @@ describe("reports date-range flow integration", () => {
       await screen.findByText("Start date must be on or before end date."),
     ).toBeInTheDocument();
     const accountErrorText = await screen.findByText(
-      /Failed to load account options:/i,
+      /Failed to load SwissAI key options:/i,
     );
     const accountErrorContainer = accountErrorText.parentElement!.parentElement!;
     const retryButton = within(accountErrorContainer).getByRole("button", {

@@ -54,7 +54,6 @@ import {
   formatCurrency,
   formatModelLabel,
   formatElapsed,
-  formatSlug,
 } from "@/utils/formatters";
 
 const STATUS_CLASS_MAP: Record<string, string> = {
@@ -78,13 +77,6 @@ const TRANSPORT_CLASS_MAP: Record<string, string> = {
   websocket: "bg-sky-500/15 text-sky-700 border-sky-500/20 hover:bg-sky-500/20 dark:text-sky-300",
   automation:
     "bg-indigo-500/15 text-indigo-700 border-indigo-500/20 hover:bg-indigo-500/20 dark:text-indigo-300",
-};
-
-const PLAN_CLASS_MAP: Record<string, string> = {
-  free: "bg-zinc-500/10 text-zinc-700 border-zinc-500/20 hover:bg-zinc-500/15 dark:text-zinc-300",
-  plus: "bg-emerald-500/15 text-emerald-700 border-emerald-500/20 hover:bg-emerald-500/20 dark:text-emerald-400",
-  team: "bg-sky-500/15 text-sky-700 border-sky-500/20 hover:bg-sky-500/20 dark:text-sky-300",
-  pro: "bg-violet-500/15 text-violet-700 border-violet-500/20 hover:bg-violet-500/20 dark:text-violet-300",
 };
 
 const REQUEST_KIND_LABELS: Record<string, string> = {
@@ -396,7 +388,7 @@ export function RecentRequestsTable({
             <TableRow className="hover:bg-transparent">
               {isColumnVisible("time") ? <RequestLogTableHead column="time" label={t("dashboard.requests.columns.time")} resizeLabel={resizeLabel(t("dashboard.requests.columns.time"))} className="pl-4" width={columnWidths?.time} onWidthChange={onColumnWidthChange} /> : null}
               {isColumnVisible("account") ? <RequestLogTableHead column="account" label={t("dashboard.requests.columns.account")} resizeLabel={resizeLabel(t("dashboard.requests.columns.account"))} width={columnWidths?.account} onWidthChange={onColumnWidthChange} /> : null}
-              {isColumnVisible("plan") ? <RequestLogTableHead column="plan" label={t("dashboard.requests.columns.plan")} resizeLabel={resizeLabel(t("dashboard.requests.columns.plan"))} width={columnWidths?.plan} onWidthChange={onColumnWidthChange} /> : null}
+              {isColumnVisible("route") ? <RequestLogTableHead column="route" label={t("dashboard.requests.columns.route")} resizeLabel={resizeLabel(t("dashboard.requests.columns.route"))} width={columnWidths?.route} onWidthChange={onColumnWidthChange} /> : null}
               {isColumnVisible("apiKey") ? <RequestLogTableHead column="apiKey" label={t("dashboard.requests.columns.apiKey")} resizeLabel={resizeLabel(t("dashboard.requests.columns.apiKey"))} width={columnWidths?.apiKey} onWidthChange={onColumnWidthChange} /> : null}
               {isColumnVisible("model") ? <RequestLogTableHead column="model" label={t("dashboard.requests.columns.model")} resizeLabel={resizeLabel(t("dashboard.requests.columns.model"))} width={columnWidths?.model} onWidthChange={onColumnWidthChange} /> : null}
               {isColumnVisible("transport") ? <RequestLogTableHead column="transport" label={t("dashboard.requests.columns.transport")} resizeLabel={resizeLabel(t("dashboard.requests.columns.transport"))} className="pr-3" width={columnWidths?.transport} onWidthChange={onColumnWidthChange} /> : null}
@@ -411,15 +403,15 @@ export function RecentRequestsTable({
           <TableBody>
             {requests.map((request) => {
               const time = formatDateTimeLines(request.requestedAt, dateDisplayFormat);
-              const accountLabel = request.accountId ? (accountLabelMap.get(request.accountId) ?? request.accountId) : t("dashboard.requests.unassigned");
+              const accountLabel = request.modelSourceKind === "swissai"
+                ? request.upstreamKeyLabel ?? request.modelSourceId ?? "—"
+                : request.accountId ? (accountLabelMap.get(request.accountId) ?? request.accountId) : t("dashboard.requests.unassigned");
               const isEmailLabel = !!(request.accountId && emailLabelIds.has(request.accountId));
               const errorPreview = request.errorMessage || request.errorCode || "-";
               const hasError = !!(request.errorCode || request.errorMessage);
               const visibleServiceTier = request.actualServiceTier ?? request.serviceTier;
               const showRequestedTier =
                 !!request.requestedServiceTier && request.requestedServiceTier !== visibleServiceTier;
-              const planType = request.planType?.trim().toLowerCase() || null;
-              const planLabel = planType ? formatSlug(planType) : "--";
               const upstreamTransport = request.upstreamTransport;
               const generationSpeed = formatGenerationSpeed(request);
 
@@ -438,18 +430,7 @@ export function RecentRequestsTable({
                       accountLabel
                     )}
                   </TableCell> : null}
-                  {isColumnVisible("plan") ? <TableCell className="align-top">
-                    {planType ? (
-                      <Badge
-                        variant="outline"
-                        className={PLAN_CLASS_MAP[planType] ?? PLAN_CLASS_MAP.free}
-                      >
-                        {planLabel}
-                      </Badge>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">--</span>
-                    )}
-                  </TableCell> : null}
+                  {isColumnVisible("route") ? <TableCell className="truncate align-top font-mono text-xs">{request.route ?? "—"}</TableCell> : null}
                   {isColumnVisible("apiKey") ? <TableCell className="truncate align-top text-xs text-muted-foreground">
                     {request.apiKeyName || "--"}
                   </TableCell> : null}
@@ -458,6 +439,10 @@ export function RecentRequestsTable({
                       <span className="font-mono text-xs">
                         {formatModelLabel(request.model, request.reasoningEffort, visibleServiceTier)}
                       </span>
+                      {request.modelSourceKind === "swissai" ? <div className="mt-1 text-xs text-muted-foreground">
+                        {request.attemptCount ?? 0} attempt(s)
+                        {request.failoverReason ? ` · ${request.failoverReason}` : ""}
+                      </div> : null}
                       {request.requestKind === "warmup" || request.requestKind === "limit_warmup" ? (
                         <div className="mt-1 text-xs text-muted-foreground">
                           {REQUEST_KIND_LABELS.warmup}
@@ -598,7 +583,9 @@ export function RecentRequestsTable({
                 <RequestDetailField label={t("dashboard.requests.columns.status")} value={selectedRequest ? t(`dashboard.requestStatus.${selectedRequest.status}`, { defaultValue: REQUEST_STATUS_LABELS[selectedRequest.status] ?? selectedRequest.status }) : "—"} />
                 <RequestDetailField label={t("dashboard.requests.columns.model")} value={selectedRequest ? formatModelLabel(selectedRequest.model, selectedRequest.reasoningEffort, selectedRequest.actualServiceTier ?? selectedRequest.serviceTier) : "—"} mono />
                 <RequestDetailField label={t("dashboard.requestDetails.requestKind")} value={selectedRequest ? (REQUEST_KIND_LABELS[selectedRequest.requestKind] ?? selectedRequest.requestKind) : "—"} />
-                <RequestDetailField label={t("dashboard.requests.columns.plan")} value={selectedRequest?.planType ? formatSlug(selectedRequest.planType) : "—"} />
+                <RequestDetailField label={t("dashboard.requests.columns.route")} value={selectedRequest?.route ?? "—"} />
+                <RequestDetailField label="Stream" value={selectedRequest?.stream == null ? "—" : selectedRequest.stream ? "Streaming" : "JSON"} />
+                {selectedRequest?.modelSourceKind === "swissai" ? <RequestDetailField label="SwissAI key" value={selectedRequest.upstreamKeyLabel ?? selectedRequest.modelSourceId ?? "—"} /> : null}
                 <RequestDetailField label={t("dashboard.requestDetails.elapsed")} value={formatElapsed(selectedRequest?.latencyMs ?? null)} />
                 <RequestDetailField label="TTFT" value={formatElapsed(selectedRequest?.latencyFirstTokenMs ?? null)} />
                 <RequestDetailField label={t("dashboard.requestDetails.queue")} value={formatElapsed(selectedRequest?.latencyQueueMs ?? null)} />

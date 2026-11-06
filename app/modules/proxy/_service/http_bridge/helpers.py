@@ -3364,7 +3364,7 @@ def _http_bridge_prewarm_enabled(settings: Any) -> bool:
     value (``_service_get_settings()``), which applies the request-bound
     dashboard overlay: the field is in ``DASHBOARD_OVERRIDE_SETTINGS``, so a
     non-NULL ``dashboard_settings`` column has already won over the deprecated
-    ``CODEX_LB_*`` env alias by the time this reads it. Outside a bound request
+    ``SWISSAI_LB_*`` env alias by the time this reads it. Outside a bound request
     context (startup, schedulers, unit tests) the env alias applies, and then
     the code default (off) -- the same precedence ``resolve_inheritable``
     applies for the settings API's provenance.
@@ -3624,7 +3624,7 @@ def _http_bridge_should_attempt_local_bootstrap_rebind(
 def _normalized_http_bridge_instance_ring(settings: Settings) -> tuple[str, tuple[str, ...]]:
     instance_id = settings.http_responses_session_bridge_instance_id.strip()
     if not instance_id:
-        instance_id = "codex-lb"
+        instance_id = "swissai-lb"
     ring_entries: list[str] = []
     for entry in settings.http_responses_session_bridge_instance_ring:
         stripped = entry.strip()

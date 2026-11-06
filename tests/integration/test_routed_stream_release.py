@@ -66,7 +66,6 @@ class _HoldingUpstream:
 def aiohttp_routed_egress(monkeypatch: pytest.MonkeyPatch) -> list[Any]:
     """Force the aiohttp fallback transport and capture every raw upstream response it produces."""
 
-    monkeypatch.setattr(codex_module, "discover_native_egress_client", lambda: None)
     captured: list[Any] = []
 
     class _RecordingCodexClient(codex_module.CodexClient):

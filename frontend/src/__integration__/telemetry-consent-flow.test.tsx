@@ -12,7 +12,7 @@ describe("telemetry consent flow integration", () => {
   it("shows the one-time consent dialog on dashboard entry and persists the decision", async () => {
     const user = userEvent.setup({ delay: null });
     let putBody: unknown = null;
-    let consent = createTelemetryConsent({ state: "undecided", source: "default", active: true });
+    let consent = createTelemetryConsent({ state: "undecided", source: "default", active: false });
     server.use(
       http.get("/api/settings/telemetry", () => HttpResponse.json(consent)),
       http.put("/api/settings/telemetry", async ({ request }) => {
@@ -31,7 +31,7 @@ describe("telemetry consent flow integration", () => {
     expect(dialog).toHaveTextContent('"timestamp": "2026-08-06T00:00:00Z"');
     expect(dialog).toHaveTextContent('"schema_version": 1');
 
-    await user.click(screen.getByRole("button", { name: "Disable telemetry" }));
+    await user.click(screen.getByRole("button", { name: "Keep disabled" }));
 
     await waitFor(() => expect(putBody).toEqual({ enabled: false }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());

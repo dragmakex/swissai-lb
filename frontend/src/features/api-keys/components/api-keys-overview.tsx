@@ -157,7 +157,6 @@ export function ApiKeysOverview({ apiKeys }: ApiKeysOverviewProps) {
   const usedKeys = apiKeys.filter((apiKey) => (apiKey.usageSummary?.requestCount ?? 0) > 0).length;
   const totalRequests = apiKeys.reduce((sum, apiKey) => sum + (apiKey.usageSummary?.requestCount ?? 0), 0);
   const totalTokens = apiKeys.reduce((sum, apiKey) => sum + (apiKey.usageSummary?.totalTokens ?? 0), 0);
-  const totalCostUsd = apiKeys.reduce((sum, apiKey) => sum + (apiKey.usageSummary?.totalCostUsd ?? 0), 0);
   const inactiveKeys = totalKeys - activeKeys;
   const idleKeys = totalKeys - usedKeys;
 
@@ -177,14 +176,14 @@ export function ApiKeysOverview({ apiKeys }: ApiKeysOverviewProps) {
           value={formatCompactNumber(totalRequests)}
           meta={t("apiKeys.overview.tokensMeta", { count: formatCompactNumber(totalTokens) })}
         />
-        <OverviewStat label={t("apiKeys.overview.lifetimeCost")} value={formatCurrency(totalCostUsd)} meta={t("apiKeys.overview.lifetimeCostMeta")} />
+        <OverviewStat label={t("apiKeys.overview.lifetimeCost")} value="—" meta="SwissAI pricing is unknown" />
       </div>
 
       <div className="grid gap-4 xl:grid-cols-2">
         <BreakdownPanel
-          title={t("apiKeys.overview.costByKey")}
-          subtitle={t("apiKeys.overview.costByKeySubtitle")}
-          metric="cost"
+          title="Requests by client key"
+          subtitle="Logical requests, excluding intermediate retry attempts"
+          metric="requests"
           apiKeys={apiKeys}
         />
         <BreakdownPanel

@@ -14,7 +14,7 @@ function resolveConnectAddress(hostname: string, runtimeAddress: string | null):
 
   const normalized = hostname.trim().toLowerCase();
   if (!normalized || LOOPBACK_HOSTS.has(normalized)) {
-    return "<codex-lb-ip-or-dns>";
+    return "<swissai-lb-ip-or-dns>";
   }
   return hostname;
 }

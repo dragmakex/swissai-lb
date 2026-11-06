@@ -21,7 +21,6 @@ const ALL_CHART_LABELS = [
   "Time to First Token",
   "Tokens per Second",
   "Queue Wait",
-  "Thread Identity & Cache Locality",
 ];
 // Derived so adding a card to REPORT_CHART_DEFINITIONS does not silently
 // leave these assertions checking a stale count.
@@ -50,7 +49,7 @@ describe("ReportsFilters", () => {
       />,
     );
 
-    await user.click(screen.getByRole("button", { name: /accounts/i }));
+    await user.click(screen.getByRole("button", { name: /SwissAI keys/i }));
     await user.click(await screen.findByRole("menuitemcheckbox", { name: /primary account/i }));
 
     expect(onFiltersChange).toHaveBeenCalledWith({ ...FILTERS, accountId: ["acc_one"] });

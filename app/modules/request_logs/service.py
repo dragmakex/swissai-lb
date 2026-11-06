@@ -133,7 +133,7 @@ class RequestLogsService:
             include_api_key_identity=include_api_key_identity,
         )
         logs = result.logs
-        total = result.total
+        total = max(result.total, offset + len(logs)) if logs else result.total
         conversation = None
         if conversation_id is not None:
             assert result.aggregated_cost_usd is not None
@@ -152,6 +152,15 @@ class RequestLogsService:
             )
             for log in logs
         ]
+        swissai_ids = [log.request_id for log in logs if log.model_source_kind == "swissai"]
+        if swissai_ids:
+            by_request = {entry.request_id: entry for entry in requests}
+            for attempt in await self._repo.swissai_attempts(swissai_ids):
+                entry = by_request[attempt.request_id]
+                entry.attempt_count += 1
+                entry.upstream_key_label = attempt.key_label
+                if attempt.failure_reason:
+                    entry.failover_reason = attempt.failure_reason
         return RequestLogsPage(
             requests=requests,
             total=total,

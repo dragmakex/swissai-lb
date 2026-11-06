@@ -5,14 +5,12 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import App from "@/App";
 import {
-  createAccountSummary,
   createDashboardOverview,
 } from "@/test/mocks/factories";
 import { server } from "@/test/mocks/server";
 import { renderWithProviders } from "@/test/utils";
 
 const OUTAGE = "forced overview outage";
-const RECOVERED = "Recovered Overview Account";
 
 afterEach(() => {
   window.history.pushState({}, "", "/");
@@ -44,16 +42,7 @@ describe("dashboard overview error integration", () => {
         signalRetry();
         await recoveryGate;
         return HttpResponse.json(
-          createDashboardOverview({
-            accounts: [
-              createAccountSummary({
-                accountId: "acc_recovered_overview",
-                chatgptAccountId: "chatgpt_acc_recovered_overview",
-                displayName: RECOVERED,
-                email: "recovered-overview@example.com",
-              }),
-            ],
-          }),
+          createDashboardOverview(),
         );
       }),
     );
@@ -62,7 +51,8 @@ describe("dashboard overview error integration", () => {
     const { container } = renderWithProviders(<App />);
 
     expect(await screen.findByText(OUTAGE)).toBeInTheDocument();
-    await waitFor(() => expect(overviewCalls).toBeGreaterThan(1));
+    // The test provider disables automatic query retries; the explicit Retry owns recovery.
+    expect(overviewCalls).toBe(1);
 
     const alert = screen.getByRole("alert");
     const terminalState = alert.parentElement ?? alert;
@@ -82,9 +72,9 @@ describe("dashboard overview error integration", () => {
     expect(container.querySelectorAll('[data-slot="skeleton"]')).toHaveLength(0);
 
     releaseRecovery();
-    expect(await screen.findByText(RECOVERED)).toBeInTheDocument();
+    expect(await screen.findByText("Requests (7d)")).toBeInTheDocument();
     await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
-    expect(overviewCalls).toBeGreaterThan(2);
+    expect(overviewCalls).toBe(2);
   });
 
   it("does not carry an unresolved Retry into a new timeframe", async () => {
@@ -121,14 +111,6 @@ describe("dashboard overview error integration", () => {
                 bucketSeconds: 86_400,
                 bucketCount: 30,
               },
-              accounts: [
-                createAccountSummary({
-                  accountId: "acc_thirty_day",
-                  chatgptAccountId: "chatgpt_acc_thirty_day",
-                  displayName: "Thirty Day Overview Account",
-                  email: "thirty-day@example.com",
-                }),
-              ],
             }),
           );
         }
@@ -180,7 +162,8 @@ describe("dashboard overview error integration", () => {
     expect(screen.queryByRole("button", { name: "Retry" })).not.toBeInTheDocument();
 
     releaseNextTimeframeRequest();
-    expect((await screen.findAllByText("Thirty Day Overview Account")).length).toBeGreaterThan(0);
+    expect(await screen.findByText("Requests (30d)")).toBeInTheDocument();
+    expect(screen.queryByText("Requests (7d)")).not.toBeInTheDocument();
   });
 
   it("retains terminal no-data error during an invalidation refetch", async () => {
@@ -206,16 +189,7 @@ describe("dashboard overview error integration", () => {
         signalRefresh();
         await refreshGate;
         return HttpResponse.json(
-          createDashboardOverview({
-            accounts: [
-              createAccountSummary({
-                accountId: "acc_refreshed",
-                chatgptAccountId: "chatgpt_acc_refreshed",
-                displayName: RECOVERED,
-                email: "refreshed@example.com",
-              }),
-            ],
-          }),
+          createDashboardOverview(),
         );
       }),
     );
@@ -237,6 +211,7 @@ describe("dashboard overview error integration", () => {
     expect(retry).toHaveAttribute("aria-busy", "true");
 
     releaseRefresh();
-    expect((await screen.findAllByText(RECOVERED)).length).toBeGreaterThan(0);
+    expect(await screen.findByText("Requests (7d)")).toBeInTheDocument();
+    expect(screen.queryByText(OUTAGE)).not.toBeInTheDocument();
   });
 });

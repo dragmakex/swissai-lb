@@ -1,19 +1,21 @@
 from __future__ import annotations
 
 import pytest
-from pydantic import ValidationError
 
-from app.core.config.settings import Settings
+from app.core.config.settings import Settings, warn_removed_settings
 
 pytestmark = pytest.mark.unit
 
 
-def test_chunk_writer_format_defaults_off_and_validates(monkeypatch) -> None:
-    monkeypatch.delenv("CODEX_LB_HTTP_RESPONSES_SESSION_BRIDGE_OPERATION_SPOOL_FORMAT", raising=False)
-
-    assert Settings(_env_file=None).http_responses_session_bridge_operation_spool_format == "rows_v1"
-    monkeypatch.setenv("CODEX_LB_HTTP_RESPONSES_SESSION_BRIDGE_OPERATION_SPOOL_FORMAT", "chunks_v2")
-    assert Settings(_env_file=None).http_responses_session_bridge_operation_spool_format == "chunks_v2"
-    monkeypatch.setenv("CODEX_LB_HTTP_RESPONSES_SESSION_BRIDGE_OPERATION_SPOOL_FORMAT", "unknown")
-    with pytest.raises(ValidationError):
-        Settings(_env_file=None)
+@pytest.mark.parametrize(
+    "field",
+    [
+        "http_responses_session_bridge_operation_spool_format",
+        "http_responses_session_bridge_operation_event_spool_max_bytes",
+    ],
+)
+def test_swissai_does_not_expose_retired_bridge_settings(monkeypatch, field: str) -> None:
+    name = "SWISSAI_LB_" + field.upper()
+    monkeypatch.setenv(name, "ignored-test-value")
+    assert not hasattr(Settings(_env_file=None), field)
+    assert warn_removed_settings({name: "ignored-test-value"}) == [name]

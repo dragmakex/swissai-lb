@@ -53,78 +53,30 @@ describe("AppHeader", () => {
     });
   });
 
-  it("shows the summed Accounts reset-credit badge capped at 99+", async () => {
+  it.each([
+    { name: "large legacy balances", credits: [70, 40], badgesEnabled: true },
+    { name: "missing balances", credits: [5, undefined, null, 3], badgesEnabled: true },
+    { name: "zero balances", credits: [0, 0], badgesEnabled: true },
+    { name: "disabled legacy badges", credits: [5], badgesEnabled: false },
+  ])("does not fetch or display subscription credits for $name", async ({ credits, badgesEnabled }) => {
+    const legacyRead = vi.fn();
     server.use(
-      http.get("/api/accounts", () =>
-        HttpResponse.json({
-          accounts: [
-            createAccountSummary({ availableResetCredits: 70 }),
-            createAccountSummary({ accountId: "acc-2", availableResetCredits: 40 }),
-          ],
-        }),
-      ),
+      http.get("/api/accounts", () => {
+        legacyRead();
+        return HttpResponse.json({ accounts: credits.map((credit, index) =>
+          createAccountSummary({ accountId: `account-${index}`, availableResetCredits: credit })) });
+      }),
+      http.get("/api/settings", () => HttpResponse.json(createDashboardSettings({ showResetCreditBadges: badgesEnabled }))),
     );
-
+    const user = userEvent.setup();
     renderHeader();
-
-    expect(await screen.findAllByText("99+")).not.toHaveLength(0);
-  });
-
-  it("sums reset-credit badge across accounts and treats missing counts as zero", async () => {
-    server.use(
-      http.get("/api/accounts", () =>
-        HttpResponse.json({
-          accounts: [
-            createAccountSummary({ availableResetCredits: 5 }),
-            createAccountSummary({ accountId: "acc-2" }),
-            createAccountSummary({ accountId: "acc-3", availableResetCredits: null }),
-            createAccountSummary({ accountId: "acc-4", availableResetCredits: 3 }),
-          ],
-        }),
-      ),
-    );
-
-    renderHeader();
-
-    expect(await screen.findAllByText("8")).not.toHaveLength(0);
-  });
-
-  it("hides the Accounts reset-credit badge when no resets are available", async () => {
-    server.use(
-      http.get("/api/accounts", () =>
-        HttpResponse.json({
-          accounts: [
-            createAccountSummary({ availableResetCredits: 0 }),
-            createAccountSummary({ accountId: "acc-2", availableResetCredits: 0 }),
-          ],
-        }),
-      ),
-    );
-
-    renderHeader();
-
-    await screen.findByRole("link", { name: /Accounts/i });
+    expect(await screen.findByRole("link", { name: "SwissAI Keys" })).toHaveAttribute("href", "/accounts");
+    await user.click(screen.getByRole("button", { name: "Open menu" }));
     expect(screen.queryByText("99+")).not.toBeInTheDocument();
-  });
-
-  it("hides the Accounts reset-credit badge when settings disable reset-credit badges", async () => {
-    server.use(
-      http.get("/api/accounts", () =>
-        HttpResponse.json({
-          accounts: [createAccountSummary({ availableResetCredits: 5 })],
-        }),
-      ),
-      http.get("/api/settings", () =>
-        HttpResponse.json(createDashboardSettings({ showResetCreditBadges: false })),
-      ),
-    );
-
-    renderHeader();
-
-    await screen.findByRole("link", { name: /Accounts/i });
-    await waitFor(() => {
-      expect(screen.queryByText("5")).not.toBeInTheDocument();
-    });
+    expect(screen.queryByText("8")).not.toBeInTheDocument();
+    expect(screen.queryByText("5")).not.toBeInTheDocument();
+    expect(screen.queryByText("Advanced")).not.toBeInTheDocument();
+    expect(legacyRead).not.toHaveBeenCalled();
   });
 
   it("renders core destinations as top-level links and keeps Automations out of the pill bar", async () => {
@@ -132,30 +84,31 @@ describe("AppHeader", () => {
 
     expect(await screen.findByRole("link", { name: /Dashboard/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Reports/i })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Accounts/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /SwissAI Keys/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /APIs/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Settings/i })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Automations" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Advanced" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Advanced" })).not.toBeInTheDocument();
   });
 
-  it("reveals Automations after opening the Advanced menu", async () => {
+  it("does not expose retired Automations in the mobile menu", async () => {
     const user = userEvent.setup();
     renderHeader();
-
-    await user.click(screen.getByRole("button", { name: "Advanced" }));
-
-    expect(await screen.findByRole("menuitem", { name: "Automations" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Open menu" }));
+    expect(screen.queryByText("Automations")).not.toBeInTheDocument();
+    expect(screen.queryByText("Advanced")).not.toBeInTheDocument();
   });
 
-  it("marks the Advanced trigger active only while an advanced route is current", () => {
+  it("does not mark a retired route as a supported navigation destination", () => {
     renderHeader("/automations");
-    expect(screen.getByRole("button", { name: "Advanced" })).toHaveAttribute("data-active", "true");
+    expect(screen.queryByRole("button", { name: "Advanced" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { current: "page" })).not.toBeInTheDocument();
   });
 
-  it("keeps the Advanced trigger inactive on core routes", () => {
+  it("marks the active supported core destination", () => {
     renderHeader("/dashboard");
-    expect(screen.getByRole("button", { name: "Advanced" })).toHaveAttribute("data-active", "false");
+    expect(screen.getByRole("link", { name: "Dashboard" })).toHaveAttribute("aria-current", "page");
+    expect(screen.queryByRole("button", { name: "Advanced" })).not.toBeInTheDocument();
   });
 
   describe("account tiering", () => {
@@ -315,7 +268,7 @@ describe("AppHeader", () => {
 
       expect(screen.getByRole("link", { name: /Dashboard/i })).toBeInTheDocument();
       expect(screen.getByRole("link", { name: /Settings/i })).toBeInTheDocument();
-      expect(screen.queryByRole("link", { name: /Accounts/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole("link", { name: /SwissAI Keys/i })).not.toBeInTheDocument();
     });
 
     it.each([
@@ -327,7 +280,7 @@ describe("AppHeader", () => {
 
       renderHeader();
 
-      for (const name of [/Dashboard/i, /Reports/i, /Accounts/i, /APIs/i, /Settings/i]) {
+      for (const name of [/Dashboard/i, /Reports/i, /SwissAI Keys/i, /APIs/i, /Settings/i]) {
         expect(screen.getByRole("link", { name })).toBeInTheDocument();
       }
     });

@@ -22,24 +22,24 @@ describe("automations page integration", () => {
 		window.history.pushState({}, "", "/automations");
 	});
 
-	it("navigates to automations through the Advanced header menu", async () => {
+	it("does not expose subscription automation controls through either navigation menu", async () => {
 		const user = userEvent.setup({ delay: null });
 		window.history.pushState({}, "", "/dashboard");
 		renderWithProviders(<App />);
 
-		const advancedTrigger = await screen.findByRole("button", { name: "Advanced" });
+		expect(await screen.findByRole("heading", { name: "Dashboard" })).toBeInTheDocument();
+		expect(screen.queryByRole("button", { name: "Advanced" })).not.toBeInTheDocument();
 		expect(screen.queryByRole("link", { name: "Automations" })).not.toBeInTheDocument();
-		await user.click(advancedTrigger);
-		await user.click(await screen.findByRole("menuitem", { name: "Automations" }));
-
-		expect(await screen.findByRole("heading", { name: "Automations" })).toBeInTheDocument();
-		expect(window.location.pathname).toBe("/automations");
+		await user.click(screen.getByRole("button", { name: "Open menu" }));
+		expect(screen.queryByText("Automations")).not.toBeInTheDocument();
+		expect(window.location.pathname).toBe("/dashboard");
 	});
 
-	it("renders automations from a direct /automations deep link", async () => {
+	it("gives a recoverable not-found page for a retired automation deep link", async () => {
 		renderWithProviders(<App />);
-
-		expect(await screen.findByRole("heading", { name: "Automations" })).toBeInTheDocument();
+		expect(await screen.findByTestId("route-not-found")).toBeInTheDocument();
+		expect(screen.queryByRole("heading", { name: "Automations" })).not.toBeInTheDocument();
+		expect(screen.getByTestId("route-dashboard-link")).toHaveAttribute("href", "/dashboard");
 		expect(window.location.pathname).toBe("/automations");
 	});
 

@@ -16,7 +16,7 @@ export function ApiKeyAuthToggle({ enabled, disabled = false, onChange }: ApiKey
         <p className="text-sm font-medium">{t("apiKeys.authToggle.title")}</p>
         <p className="text-xs text-muted-foreground">{t("apiKeys.authToggle.description")}</p>
       </div>
-      <Switch checked={enabled} disabled={disabled} onCheckedChange={onChange} />
+      <Switch aria-label={t("apiKeys.authToggle.title")} checked={enabled} disabled={disabled} onCheckedChange={onChange} />
     </div>
   );
 }

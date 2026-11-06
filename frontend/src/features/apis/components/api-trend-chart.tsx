@@ -164,7 +164,7 @@ export function ApiTrendChart({ cost, tokens }: ApiTrendChartProps) {
           axisLine={false}
           width={48}
         />
-        <YAxis
+        {cost.length > 0 ? <YAxis
           yAxisId="cost"
           orientation="right"
           domain={[0, maxCost * 1.1]}
@@ -174,7 +174,7 @@ export function ApiTrendChart({ cost, tokens }: ApiTrendChartProps) {
           tickLine={false}
           axisLine={false}
           width={48}
-        />
+        /> : null}
         <Tooltip
           content={<CustomTooltip />}
           cursor={{ stroke: "hsl(var(--border))", strokeWidth: 1 }}
@@ -191,7 +191,7 @@ export function ApiTrendChart({ cost, tokens }: ApiTrendChartProps) {
           isAnimationActive={!reducedMotion}
           animationDuration={500}
         />
-        <Area
+        {cost.length > 0 ? <Area
           yAxisId="cost"
           type="monotone"
           dataKey="cost"
@@ -203,7 +203,7 @@ export function ApiTrendChart({ cost, tokens }: ApiTrendChartProps) {
           isAnimationActive={!reducedMotion}
           animationDuration={500}
           animationBegin={100}
-        />
+        /> : null}
       </AreaChart>
     </ResponsiveContainer>
   );

@@ -73,14 +73,12 @@ help:
 	  '  make lint                    ruff check + format check + architecture checks' \
 	  '  make architecture-check      proxy, settings, and migration-graph fitness ratchets' \
 	  '  make typecheck               ty check' \
-	  '  make rust-check              fmt + clippy + tests + release build' \
-	  '  make rust-audit              cargo-deny dependency policy' \
 	  '  make frontend-test           vitest coverage, same as CI' \
 	  '  make test-dashboard-browser-smoke  built dashboard against the real local API' \
 	  '  make test-unit               unit pytest slice, same as CI' \
 	  '  make test-integration-core   integration-core pytest slice' \
 	  '  make package                 build and verify sdist/wheel' \
-	  '  make ci-fast                 lint/type/frontend/unit/package/rust-check' \
+	  '  make ci-fast                 lint/type/frontend/unit/package' \
 	  '  make ci                      full local CI gate'
 
 .PHONY: frontend-install frontend-lint frontend-typecheck frontend-test frontend-test-fast frontend-build \
@@ -95,10 +93,10 @@ frontend-typecheck: frontend-install
 	cd frontend && bun run typecheck
 
 frontend-test: frontend-install
-	cd frontend && bun run test:coverage
+	cd frontend && bun run test:coverage --maxWorkers=2
 
 frontend-test-fast: frontend-install
-	cd frontend && bun run test
+	cd frontend && bun run test --maxWorkers=2
 
 frontend-build: frontend-install
 	cd frontend && bun run build
@@ -110,7 +108,7 @@ test-dashboard-browser-smoke: frontend-build frontend-playwright-chromium
 	uv sync --dev --frozen
 	uv run python scripts/run_dashboard_browser_smoke.py --frontend-built
 
-.PHONY: lint typecheck architecture-check rust-fmt rust-lint rust-test rust-build rust-check rust-audit
+.PHONY: lint typecheck architecture-check
 lint: architecture-check
 	uv run ruff check .
 	uv run ruff format --check .
@@ -125,23 +123,6 @@ architecture-check:
 typecheck:
 	uv sync --dev --frozen
 	uv run ty check
-
-rust-fmt:
-	cargo fmt --all -- --check
-
-rust-lint:
-	cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
-
-rust-test:
-	cargo test --workspace --all-targets --locked
-
-rust-build:
-	cargo build --release --locked --package codex-lb-egress-worker --bin codex-lb-native-egress
-
-rust-check: rust-fmt rust-lint rust-test rust-build
-
-rust-audit:
-	cargo deny --all-features check
 
 .PHONY: test-unit test-integration-core test-integration-core-shard \
 	test-integration-core-1 test-integration-core-2 test-integration-core-3 \
@@ -186,23 +167,23 @@ test-e2e: frontend-build
 
 test-postgres:
 	uv sync --dev --frozen
-	CODEX_LB_TEST_DATABASE_URL="$${CODEX_LB_TEST_DATABASE_URL:-$(POSTGRES_TEST_DATABASE_URL)}" \
+	SWISSAI_LB_TEST_DATABASE_URL="$${SWISSAI_LB_TEST_DATABASE_URL:-$(POSTGRES_TEST_DATABASE_URL)}" \
 	  PYTHONFAULTHANDLER=1 \
 	  uv run pytest $(PYTEST_ARGS) $(POSTGRES_PYTEST_TARGETS)
 
 .PHONY: migration-check migration-check-postgres
 migration-check:
 	uv sync --dev --frozen
-	TMP_DB="$$(mktemp -u /tmp/codex-lb-ci-migrate-XXXXXX.db)"; \
+	TMP_DB="$$(mktemp -u /tmp/swissai-lb-ci-migrate-XXXXXX.db)"; \
 	DB_URL="sqlite+aiosqlite:///$${TMP_DB}"; \
 	trap 'rm -f "$${TMP_DB}"' EXIT; \
-	uv run codex-lb-db --db-url "$${DB_URL}" upgrade head; \
-	uv run codex-lb-db --db-url "$${DB_URL}" check
+	uv run swissai-lb-db --db-url "$${DB_URL}" upgrade head; \
+	uv run swissai-lb-db --db-url "$${DB_URL}" check
 
 migration-check-postgres:
 	uv sync --dev --frozen
-	uv run codex-lb-db --db-url "$(POSTGRES_TEST_DATABASE_URL)" upgrade head
-	uv run codex-lb-db --db-url "$(POSTGRES_TEST_DATABASE_URL)" check
+	uv run swissai-lb-db --db-url "$(POSTGRES_TEST_DATABASE_URL)" upgrade head
+	uv run swissai-lb-db --db-url "$(POSTGRES_TEST_DATABASE_URL)" check
 
 .PHONY: package
 package: frontend-build
@@ -214,62 +195,14 @@ package: frontend-build
 
 .PHONY: docker
 docker:
-	docker build -t codex-lb:ci .
-	trivy image --format table --exit-code 1 --severity CRITICAL --ignore-unfixed codex-lb:ci
+	docker build -t swissai-lb:ci .
+	trivy image --format table --exit-code 1 --severity CRITICAL --ignore-unfixed swissai-lb:ci
 
-.PHONY: helm-deps helm-lint helm-template helm-kubeconform
-helm-deps:
-	helm dependency build deploy/helm/codex-lb/
+.PHONY: ci-fast ci ci-extended
+ci-fast: lint typecheck frontend-test test-unit package
 
-helm-lint: helm-deps
-	helm lint --strict deploy/helm/codex-lb/ --set postgresql.auth.password=test-password
-	helm lint --strict deploy/helm/codex-lb/ -f deploy/helm/codex-lb/values-dev.yaml --set postgresql.auth.password=test-password
-	helm lint --strict deploy/helm/codex-lb/ -f deploy/helm/codex-lb/values-bundled.yaml --set postgresql.auth.password=test-password
-	helm lint --strict deploy/helm/codex-lb/ -f deploy/helm/codex-lb/values-external-db.yaml --set externalDatabase.url=postgresql+asyncpg://test:test@localhost/test
-	helm lint --strict deploy/helm/codex-lb/ -f deploy/helm/codex-lb/values-external-secrets.yaml --set externalSecrets.secretStoreRef.name=test-store
-	helm lint --strict deploy/helm/codex-lb/ -f deploy/helm/codex-lb/values-staging.yaml --set externalDatabase.url=postgresql+asyncpg://test:test@localhost/test
-	helm lint --strict deploy/helm/codex-lb/ -f deploy/helm/codex-lb/values-prod.yaml --set externalSecrets.secretStoreRef.name=test-store
+ci: frontend-lint frontend-typecheck ci-fast
 
-helm-template:
-	helm template codex-lb deploy/helm/codex-lb/ --set postgresql.auth.password=test-password > /dev/null
-	helm template codex-lb deploy/helm/codex-lb/ -f deploy/helm/codex-lb/values-dev.yaml --set postgresql.auth.password=test-password > /dev/null
-	helm template codex-lb deploy/helm/codex-lb/ -f deploy/helm/codex-lb/values-bundled.yaml --set postgresql.auth.password=test-password > /dev/null
-	helm template codex-lb deploy/helm/codex-lb/ -f deploy/helm/codex-lb/values-external-db.yaml --set externalDatabase.url=postgresql+asyncpg://test:test@localhost/test > /dev/null
-	helm template codex-lb deploy/helm/codex-lb/ -f deploy/helm/codex-lb/values-external-secrets.yaml --set externalSecrets.secretStoreRef.name=test-store > /dev/null
-	helm template codex-lb deploy/helm/codex-lb/ -f deploy/helm/codex-lb/values-staging.yaml --set externalDatabase.url=postgresql+asyncpg://test:test@localhost/test > /dev/null
-	helm template codex-lb deploy/helm/codex-lb/ -f deploy/helm/codex-lb/values-prod.yaml --set externalSecrets.secretStoreRef.name=test-store > /dev/null
-
-helm-kubeconform:
-	set -e -o pipefail; \
-	for version in 1.32.0 1.35.0; do \
-	  helm template codex-lb deploy/helm/codex-lb/ \
-	    -f deploy/helm/codex-lb/values-prod.yaml \
-	    --set externalSecrets.secretStoreRef.name=test \
-	    --set externalSecrets.secretStoreRef.kind=SecretStore \
-	    --set gatewayApi.enabled=true \
-	    --set "gatewayApi.parentRefs[0].name=test-gw" \
-	    --set "gatewayApi.hostnames[0]=test.example.com" \
-	    | kubeconform \
-	      -strict \
-	      -kubernetes-version "$${version}" \
-	      -schema-location default \
-	      -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' \
-	      -summary; \
-	done
-
-.PHONY: helm-check helm-smoke-kind
-helm-check: helm-lint helm-template helm-kubeconform
-
-helm-smoke-kind:
-	kind create cluster --name codex-lb-smoke --image kindest/node:v1.35.0 --wait 120s
-	docker build -t ghcr.io/soju06/codex-lb:ci .
-	kind load docker-image ghcr.io/soju06/codex-lb:ci --name codex-lb-smoke
-	KUBE_CONTEXT=kind-codex-lb-smoke IMAGE_REGISTRY=ghcr.io IMAGE_REPOSITORY=soju06/codex-lb IMAGE_TAG=ci ./scripts/helm-kind-smoke.sh bundled
-	KUBE_CONTEXT=kind-codex-lb-smoke IMAGE_REGISTRY=ghcr.io IMAGE_REPOSITORY=soju06/codex-lb IMAGE_TAG=ci ./scripts/helm-kind-smoke.sh external-db
-
-.PHONY: ci-fast ci
-ci-fast: lint typecheck rust-check frontend-test test-unit package
-
-ci: frontend-lint frontend-typecheck frontend-test frontend-build lint typecheck rust-check rust-audit \
-	test-unit test-integration-core test-integration-bridge test-e2e test-postgres \
-	migration-check migration-check-postgres package docker helm-check helm-smoke-kind
+# Explicit advanced/infrastructure checks, not required to run or develop the app.
+ci-extended: ci test-integration-core test-integration-bridge test-e2e test-postgres \
+	migration-check migration-check-postgres docker

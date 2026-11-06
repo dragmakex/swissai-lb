@@ -5,7 +5,20 @@ __pycache__/
 *.pyo
 *.pyd
 *.db
+*.db-*
 *.sqlite
+*.sqlite-*
+*.sqlite3
+*.sqlite3-*
+*.key
+*.pem
+*.p12
+*.pfx
+bootstrap.token
+.swissai-lb/
+.codex-lb/
+swissai-lb-data/
+data/
 .env
 .env.*
 .venv/
@@ -23,5 +36,4 @@ dist/
 build/
 htmlcov/
 refs/
-docs/
 tests/

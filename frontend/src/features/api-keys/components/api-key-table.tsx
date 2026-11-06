@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/table";
 import type { ApiKey, LimitRule, LimitType } from "@/features/api-keys/schemas";
 import { useDateDisplayFormatStore, type DateDisplayFormat } from "@/hooks/use-date-format";
-import { formatCompactNumber, formatCurrency, formatTimeLong } from "@/utils/formatters";
+import { formatCompactNumber, formatTimeLong } from "@/utils/formatters";
 
 function formatExpiry(value: string | null, neverLabel: string, displayFormat: DateDisplayFormat): string {
   if (!value) {
@@ -68,7 +68,8 @@ function formatUsageSummary(
   const total = formatCompactNumber(totalTokens);
   const cached = formatCompactNumber(cachedInputTokens);
   const requests = formatCompactNumber(requestCount);
-  const cost = formatCurrency(totalCostUsd);
+  const cost = "—";
+  void totalCostUsd;
   return t("apiKeys.table.usageSummary", { total, cached, requests, cost });
 }
 

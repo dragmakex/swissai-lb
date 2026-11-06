@@ -1533,7 +1533,7 @@ async def test_model_context_window_override_applies_to_codex_models_data_alias(
 
 @pytest.mark.asyncio
 async def test_dashboard_context_window_override_wins_over_environment_without_restart(async_client, monkeypatch):
-    """A dashboard row beats the CODEX_LB_MODEL_CONTEXT_WINDOW_OVERRIDES entry for
+    """A dashboard row beats the SWISSAI_LB_MODEL_CONTEXT_WINDOW_OVERRIDES entry for
     its slug on the next catalog request, and deleting the row falls back to the
     environment entry — no restart, no settings reload."""
     registry = get_model_registry()

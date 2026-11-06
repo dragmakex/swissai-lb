@@ -58,7 +58,7 @@ export function ModelMultiSelect({
     [value, onChange],
   );
 
-  const selectAll = useCallback(() => {
+  const clearSelection = useCallback(() => {
     onChange([]);
   }, [onChange]);
 
@@ -93,10 +93,10 @@ export function ModelMultiSelect({
           <DropdownMenuSeparator />
           <DropdownMenuCheckboxItem
             checked={value.length === 0}
-            onCheckedChange={selectAll}
+            onCheckedChange={clearSelection}
             onSelect={(e) => e.preventDefault()}
           >
-            {t("apiKeys.modelSelect.all")}
+            {placeholderLabel}
           </DropdownMenuCheckboxItem>
           <DropdownMenuSeparator />
           {filtered.map((model) => (
@@ -123,6 +123,7 @@ export function ModelMultiSelect({
               <button
                 type="button"
                 className="hover:text-foreground ml-0.5"
+                aria-label={`Remove ${modelId}`}
                 onClick={() => remove(modelId)}
               >
                 <X className="size-3" />

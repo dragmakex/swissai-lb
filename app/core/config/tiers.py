@@ -1,6 +1,6 @@
 """Configuration tiers for every ``Settings`` field (configuration-tiers capability).
 
-Each ``CODEX_LB_*`` field belongs to exactly one tier:
+Each ``SWISSAI_LB_*`` field belongs to exactly one tier:
 
 - ``T0`` bootstrap: needed before the database is reachable (data dir, DB URL,
   encryption key, migration policy, first-login token). env only.
@@ -45,6 +45,7 @@ SETTING_TIERS: Final[dict[str, Tier]] = {
     "database_alembic_auto_remap_enabled": "T0",
     "database_migration_lock_timeout_seconds": "T0",
     "upstream_base_url": "T1",
+    "allow_insecure_upstream": "T1",
     "upstream_connect_timeout_seconds": "T3",
     "upstream_websocket_trust_env": "T1",
     "proxy_request_budget_seconds": "T3",
@@ -66,8 +67,6 @@ SETTING_TIERS: Final[dict[str, Tier]] = {
     "http_responses_session_bridge_codex_prewarm_enabled": "T3",
     "http_responses_session_bridge_max_sessions": "T1",
     "http_responses_session_bridge_queue_limit": "T1",
-    "http_responses_session_bridge_operation_event_spool_max_bytes": "T1",
-    "http_responses_session_bridge_operation_spool_format": "T1",
     "http_responses_session_bridge_operation_event_spool_batch_size": "T1",
     "http_responses_session_bridge_operation_event_spool_flush_interval_seconds": "T1",
     "http_responses_session_bridge_operation_event_spool_max_pending_events": "T1",
@@ -93,6 +92,7 @@ SETTING_TIERS: Final[dict[str, Tier]] = {
     # raw socket-peer CIDRs of this replica's network namespace; sibling of the
     # trusted-proxy CIDRs below, not of the firewall allowlist (projected IPs)
     "proxy_unauthenticated_client_cidrs": "T1",
+    "proxy_allow_anonymous_lan": "T1",
     # trusted-proxy topology; policy §2 T1 example
     "firewall_trust_proxy_headers": "T1",
     # trusted-proxy topology; policy §2 T1 example
@@ -167,7 +167,7 @@ MIGRATING: Final[dict[str, str]] = {}
 # fails when the column does not exist. The field's environment variable is the
 # fallback while that column holds no decision, per the precedence rule.
 DASHBOARD_HOMES: Final[dict[str, str]] = {
-    # persisted decision > CODEX_LB_TELEMETRY_ENABLED > default (telemetry spec)
+    # persisted decision > SWISSAI_LB_TELEMETRY_ENABLED > default (telemetry spec)
     "telemetry_enabled": "dashboard_settings.telemetry_consent",
     # M4 model catalogue: one row per slug; the env dict is the per-slug fallback
     "model_context_window_overrides": "model_context_window_overrides.context_window",

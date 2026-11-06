@@ -18,7 +18,7 @@ MIGRATION_LOCK_KEY = "codex_lb:migrations"
 SQLITE_MIGRATION_LOCK_SUFFIX = ".migrate-lock"
 _POLL_INTERVAL_SECONDS = 2.0
 _WAIT_LOG_INTERVAL_SECONDS = 10.0
-_TIMEOUT_SETTING_HINT = "database_migration_lock_timeout_seconds (CODEX_LB_DATABASE_MIGRATION_LOCK_TIMEOUT_SECONDS)"
+_TIMEOUT_SETTING_HINT = "database_migration_lock_timeout_seconds (SWISSAI_LB_DATABASE_MIGRATION_LOCK_TIMEOUT_SECONDS)"
 
 
 def sqlite_migration_lock_path(db_path: Path) -> Path:

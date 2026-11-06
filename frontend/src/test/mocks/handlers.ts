@@ -2,13 +2,13 @@ import { HttpResponse, http } from "msw";
 import { z } from "zod";
 
 import type { InviteDescription } from "@/features/auth/schemas";
+import type { SwissAIKey } from "@/features/swissai/hooks";
 import type { DashboardRole, DashboardUser } from "@/features/access/api";
 import type { AuditEntry, AuthProvider, RoleMapping, ScimToken } from "@/features/organisation/api";
 
 import {
-  LIMIT_TYPES,
-  LIMIT_WINDOWS,
-  TRAFFIC_CLASSES,
+  ApiKeyCreateRequestSchema,
+  ApiKeyUpdateRequestSchema,
 } from "@/features/api-keys/schemas";
 import {
   type AccountSummary,
@@ -40,6 +40,7 @@ import {
   createDefaultModelSources,
   createDefaultRequestLogs,
   createModelSource,
+  createSwissAIKey,
   createOauthCompleteResponse,
   createOauthStartResponse,
   createOauthStatusResponse,
@@ -162,38 +163,14 @@ const OauthStartPayloadSchema = z.looseObject({
   forceMethod: z.string().optional(),
 });
 
-const ApiKeyCreatePayloadSchema = z.looseObject({
-  name: z.string().optional(),
-  trafficClass: z.enum(TRAFFIC_CLASSES).optional(),
-  transportPolicyOverride: z.enum(["smart", "always_http", "always_websocket"]).nullable().optional(),
-  assignedAccountIds: z.array(z.string()).optional(),
-  assignedSourceIds: z.array(z.string()).optional(),
-});
-
 const FirewallIpCreatePayloadSchema = z.looseObject({
   ipAddress: z.string().optional(),
 });
 
-const ApiKeyUpdatePayloadSchema = z.looseObject({
-  name: z.string().optional(),
-  allowedModels: z.array(z.string()).nullable().optional(),
-  trafficClass: z.enum(TRAFFIC_CLASSES).optional(),
-  transportPolicyOverride: z.enum(["smart", "always_http", "always_websocket"]).nullable().optional(),
-  isActive: z.boolean().optional(),
-  assignedAccountIds: z.array(z.string()).optional(),
-  assignedSourceIds: z.array(z.string()).optional(),
-  resetUsage: z.boolean().optional(),
-  limits: z
-    .array(
-      z.object({
-        limitType: z.enum(LIMIT_TYPES),
-        limitWindow: z.enum(LIMIT_WINDOWS),
-        maxValue: z.number(),
-        modelFilter: z.string().nullable().optional(),
-      }),
-    )
-    .optional(),
-});
+function mockLimits(rules: NonNullable<z.infer<typeof ApiKeyCreateRequestSchema>["limits"]>): ApiKey["limits"] {
+  return rules.map((rule, index) => ({ ...rule, id: index + 100, currentValue: 0,
+    modelFilter: rule.modelFilter ?? null, resetAt: new Date(Date.now() + 7 * 86400000).toISOString() }));
+}
 
 const AccountAliasPayloadSchema = z.object({
   alias: z.string().max(255).nullable(),
@@ -525,9 +502,13 @@ function createInitialState(): MockState {
 }
 
 let state: MockState = createInitialState();
+let swissAIKeys: SwissAIKey[] = [];
+let nextSwissAIKeyId = 1;
 
 export function resetMockState(): void {
   state = createInitialState();
+  swissAIKeys = [];
+  nextSwissAIKeyId = 1;
 }
 
 function parseDateValue(value: string | null): number | null {
@@ -898,6 +879,43 @@ function listFilteredAutomationRuns(url: URL) {
 }
 
 export const handlers = [
+  http.get("/api/swissai-keys", () => HttpResponse.json(swissAIKeys)),
+  http.post("/api/swissai-keys", async ({ request }) => {
+    const payload = await request.json() as { name: string; apiKey: string; maxConcurrency?: number | null };
+    const key = createSwissAIKey({ id: `sak_${nextSwissAIKeyId++}`, name: payload.name,
+      keyPrefix: `sk-rc-…${payload.apiKey.slice(-4)}`, maxConcurrency: payload.maxConcurrency ?? null });
+    swissAIKeys.push(key);
+    return HttpResponse.json(key, { status: 201 });
+  }),
+  http.patch("/api/swissai-keys/:keyId", async ({ params, request }) => {
+    const key = swissAIKeys.find(k => k.id === params.keyId);
+    if (!key) return HttpResponse.json({ error: { message: "Key not found" } }, { status: 404 });
+    const payload = await request.json() as { name?: string; apiKey?: string; maxConcurrency?: number | null };
+    if (payload.name !== undefined) key.name = payload.name;
+    if (payload.maxConcurrency !== undefined) key.maxConcurrency = payload.maxConcurrency;
+    if (payload.apiKey) key.keyPrefix = `sk-rc-…${payload.apiKey.slice(-4)}`;
+    return HttpResponse.json(key);
+  }),
+  ...(["pause", "resume", "probe"] as const).map(action => http.post(`/api/swissai-keys/:keyId/${action}`, ({ params }) => {
+    const key = swissAIKeys.find(k => k.id === params.keyId);
+    if (!key) return HttpResponse.json({ error: { message: "Key not found" } }, { status: 404 });
+    if (action !== "probe") key.enabled = action === "resume";
+    key.status = key.enabled ? "active" : "paused";
+    if (action === "probe") key.lastSuccessAt = new Date().toISOString();
+    return HttpResponse.json(key);
+  })),
+  http.delete("/api/swissai-keys/:keyId", ({ params }) => {
+    swissAIKeys = swissAIKeys.filter(k => k.id !== params.keyId);
+    return new HttpResponse(null, { status: 204 });
+  }),
+  http.get("/api/swissai/catalog", () => HttpResponse.json({
+    models: [{ id: "Apertus-test" }], ageSeconds: 10, lastError: null,
+  })),
+  http.get("/api/swissai/settings", () => HttpResponse.json({
+    strategy: "least_inflight", single_key_id: null, default_max_concurrency: 4,
+    first_byte_timeout_seconds: 30, admission_timeout_seconds: 10, max_queue_size: 128,
+  })),
+  http.put("/api/swissai/settings", async ({ request }) => HttpResponse.json(await request.json())),
   http.get("/health", () => {
     return HttpResponse.json({ status: "ok" });
   }),
@@ -913,7 +931,7 @@ export const handlers = [
       updateAvailable: false,
       checkedAt: "2026-05-26T00:00:00Z",
       source: "github",
-      releaseUrl: "https://github.com/Soju06/codex-lb/releases/latest",
+      releaseUrl: "https://github.com/Soju06/swissai-lb/releases/latest",
     });
   }),
 
@@ -2241,7 +2259,7 @@ export const handlers = [
   http.post("/api/dashboard-auth/totp/setup/start", () => {
     return HttpResponse.json({
       secret: "JBSWY3DPEHPK3PXP",
-      otpauthUri: "otpauth://totp/codex-lb?secret=JBSWY3DPEHPK3PXP",
+      otpauthUri: "otpauth://totp/swissai-lb?secret=JBSWY3DPEHPK3PXP",
       qrSvgDataUri: "data:image/svg+xml;base64,PHN2Zy8+",
     });
   }),
@@ -2854,19 +2872,21 @@ export const handlers = [
   }),
 
   http.post("/api/api-keys/", async ({ request }) => {
-    const payload = await parseJsonBody(request, ApiKeyCreatePayloadSchema);
+    const payload = await parseJsonBody(request, ApiKeyCreateRequestSchema);
+    if (!payload) return HttpResponse.json({ error: { code: "invalid_api_key_payload", message: "Invalid client key" } }, { status: 400 });
     const sequence = state.apiKeys.length + 1;
     const created = createApiKeyCreateResponse({
       ...createApiKey({
+        ...payload,
         id: `key_${sequence}`,
-        name: payload?.name ?? `API Key ${sequence}`,
-        accountAssignmentScopeEnabled:
-          (payload?.assignedAccountIds?.length ?? 0) > 0,
-        sourceAssignmentScopeEnabled:
-          (payload?.assignedSourceIds?.length ?? 0) > 0,
-        assignedAccountIds: payload?.assignedAccountIds ?? [],
-        assignedSourceIds: payload?.assignedSourceIds ?? [],
-        trafficClass: payload?.trafficClass ?? "foreground",
+        name: payload.name,
+        allowedModels: payload.allowedModels ?? null,
+        accountAssignmentScopeEnabled: payload.assignedAccountIds != null,
+        sourceAssignmentScopeEnabled: payload.assignedSourceIds != null,
+        assignedAccountIds: payload.assignedAccountIds ?? [],
+        assignedSourceIds: payload.assignedSourceIds ?? [],
+        limits: mockLimits(payload.limits ?? []),
+        trafficClass: payload.trafficClass ?? "foreground",
       }),
       key: `sk-test-generated-${sequence}`,
     });
@@ -2883,7 +2903,7 @@ export const handlers = [
         { status: 404 },
       );
     }
-    const payload = await parseJsonBody(request, ApiKeyUpdatePayloadSchema);
+    const payload = await parseJsonBody(request, ApiKeyUpdateRequestSchema);
     if (!payload) {
       return HttpResponse.json(existing);
     }
@@ -2900,32 +2920,22 @@ export const handlers = [
         : {}),
       ...(payload.assignedAccountIds !== undefined
         ? {
-            accountAssignmentScopeEnabled:
-              payload.assignedAccountIds.length > 0,
+            accountAssignmentScopeEnabled: payload.assignedAccountIds != null,
           }
         : {}),
       ...(payload.assignedAccountIds !== undefined
-        ? { assignedAccountIds: payload.assignedAccountIds }
+        ? { assignedAccountIds: payload.assignedAccountIds ?? [] }
         : {}),
       ...(payload.assignedSourceIds !== undefined
         ? {
-            sourceAssignmentScopeEnabled:
-              payload.assignedSourceIds.length > 0,
-            assignedSourceIds: payload.assignedSourceIds,
+            sourceAssignmentScopeEnabled: payload.assignedSourceIds != null,
+            assignedSourceIds: payload.assignedSourceIds ?? [],
           }
         : {}),
     };
 
     if (payload.limits) {
-      overrides.limits = payload.limits.map((l, idx) => ({
-        id: idx + 100,
-        limitType: l.limitType,
-        limitWindow: l.limitWindow,
-        maxValue: l.maxValue,
-        currentValue: 0,
-        modelFilter: l.modelFilter ?? null,
-        resetAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-      }));
+      overrides.limits = mockLimits(payload.limits);
     }
 
     const updated = createApiKey({

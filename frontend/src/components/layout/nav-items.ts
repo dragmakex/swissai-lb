@@ -14,9 +14,7 @@ export const CORE_NAV_ITEMS = [
   { to: "/settings", labelKey: "nav.settings", requires: "dashboard:read" },
 ] as const satisfies readonly NavItem[];
 
-export const ADVANCED_NAV_ITEMS = [
-  { to: "/automations", labelKey: "nav.automations", requires: "dashboard:read" },
-] as const satisfies readonly NavItem[];
+export const ADVANCED_NAV_ITEMS: readonly NavItem[] = [];
 
 /** The permission a route needs, looked up from the nav definition (`null` for unlisted routes). */
 export function routePermission(pathname: string): Permission | null {

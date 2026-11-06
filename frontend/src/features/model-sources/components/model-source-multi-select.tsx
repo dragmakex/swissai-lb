@@ -119,7 +119,7 @@ export function ModelSourceMultiSelect({
             onCheckedChange={() => onChange([])}
             onSelect={(event) => event.preventDefault()}
           >
-	            {t("modelSources.selector.all")}
+            {placeholder ?? t("modelSources.selector.all")}
           </DropdownMenuCheckboxItem>
           <DropdownMenuSeparator />
           {filtered.map((source) => (
@@ -150,6 +150,7 @@ export function ModelSourceMultiSelect({
               <button
                 type="button"
                 className="ml-0.5 hover:text-foreground"
+                aria-label={`Remove ${source.name}`}
                 onClick={() => remove(source.id)}
               >
                 <X className="size-3" />

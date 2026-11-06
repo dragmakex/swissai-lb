@@ -49,18 +49,6 @@ from app.core.clients.codex import (
 )
 from app.core.clients.codex_version import get_codex_version_cache
 from app.core.clients.http import acquire_http_client, lease_http_session
-from app.core.clients.native_egress import (
-    NativeEgressClient,
-    NativeEgressError,
-    NativeEgressProtocolError,
-    NativeEgressRequest,
-    NativeEgressResponse,
-    NativeEgressTransportError,
-    NativeEgressUnavailable,
-    NativeResponsesEvent,
-    NativeSseOptions,
-    discover_native_egress_client,
-)
 from app.core.clients.stream_errors import StreamEventTooLargeError, StreamIdleTimeoutError
 from app.core.clients.thread_cache_identity import (
     ThreadCacheIdentity,
@@ -77,7 +65,6 @@ from app.core.errors import (
     openai_error,
     response_failed_event,
     synthetic_stream_failure_event,
-    synthetic_transport_failure_event,
 )
 from app.core.openai.exceptions import ClientPayloadError
 from app.core.openai.model_registry import get_model_registry
@@ -111,7 +98,6 @@ from app.core.upstream_proxy import ResolvedUpstreamRoute
 from app.core.usage.live_hub import publish_live_usage
 from app.core.usage.live_snapshots import EVENT_MARKER, parse_rate_limit_event_text, parse_rate_limit_headers
 from app.core.utils.json_guards import is_json_mapping
-from app.core.utils.proxy_env import resolve_http_proxy_from_env
 from app.core.utils.request_id import get_request_id
 from app.core.utils.shared_future import _await_cleanup_deferring_cancellation, _await_task_deferring_cancellation
 from app.core.utils.sse import (
@@ -125,7 +111,7 @@ from app.core.utils.sse import (
 CODEX_INSTALLATION_ID_HEADER = "x-codex-installation-id"
 CODEX_TURN_METADATA_HEADER = "x-codex-turn-metadata"
 CODEX_ROUTING_HINT_HEADER = "x-codex-routing-hint"
-CODEX_LB_REQUIRED_CAPABILITY_HEADER = "x-codex-lb-required-capability"
+SWISSAI_LB_REQUIRED_CAPABILITY_HEADER = "x-codex-lb-required-capability"
 CODEX_RESPONSES_LITE_HEADER = "x-openai-internal-codex-responses-lite"
 CODEX_RESPONSES_LITE_WEBSOCKET_METADATA_KEY = "ws_request_header_x_openai_internal_codex_responses_lite"
 
@@ -174,7 +160,7 @@ IGNORE_INBOUND_HEADERS = {
     "x-real-ip",
     CODEX_INSTALLATION_ID_HEADER,
     CODEX_ROUTING_HINT_HEADER,
-    CODEX_LB_REQUIRED_CAPABILITY_HEADER,
+    SWISSAI_LB_REQUIRED_CAPABILITY_HEADER,
     "true-client-ip",
 }
 INTERNAL_OPENAI_UPSTREAM_HEADERS = frozenset(
@@ -1489,14 +1475,6 @@ async def _iter_sse_events(
     idle_timeout_seconds: float,
     max_event_bytes: int,
 ) -> AsyncGenerator[str, None]:
-    if isinstance(resp, NativeEgressResponse) and resp.sse_framed:
-        # Rust owns byte framing and upstream activity deadlines for this
-        # attempt; waiting for an entire event here would time out active
-        # streams that deliver a large event across many partial body reads.
-        async with contextlib.aclosing(resp.iter_sse_events()) as events:
-            async for event in events:
-                yield event
-        return
 
     async def _next_chunk() -> bytes:
         return await iterator.__anext__()
@@ -1628,20 +1606,6 @@ async def _compact_response_payload_from_success_response(
     idle_timeout_seconds: float,
     max_event_bytes: int,
 ) -> JsonValue:
-    if isinstance(resp, NativeEgressResponse) and resp.compact_collected:
-        result = await resp.compact_result()
-        if not is_json_mapping(result):
-            raise NativeEgressProtocolError("native compact result has an invalid envelope")
-        kind = result.get("kind")
-        if kind == "completed" and is_json_mapping(response := result.get("response")):
-            return response
-        if kind == "terminal_error" and is_json_mapping(event := result.get("event")):
-            event_type = event.get("type")
-            if isinstance(event_type, str) and event_type in {"response.failed", "response.incomplete", "error"}:
-                raise _proxy_response_error_from_compact_sse_terminal(event, event_type)
-        if kind == "invalid" and isinstance(message := result.get("message"), str):
-            raise ValueError(message)
-        raise NativeEgressProtocolError("native compact result has an invalid envelope")
     headers = _codex_response_headers(resp)
     content_type = next((value for key, value in headers.items() if key.lower() == "content-type"), "")
     content = getattr(resp, "content", None)
@@ -2114,8 +2078,6 @@ def _normalize_multi_data_sse_block(
 
 
 def _normalize_sse_event_block(event_block: str) -> str:
-    if isinstance(event_block, NativeResponsesEvent) and not event_block.python_normalization:
-        return event_block
     if not event_block:
         return event_block
 
@@ -2224,8 +2186,6 @@ def _normalize_stream_payload_for_http_block(
     *,
     enforce_openai_sdk_contract: bool = True,
 ) -> tuple[str, str | None]:
-    if isinstance(event_block, NativeResponsesEvent) and not event_block.python_normalization:
-        return event_block, event_block.event_type
     # Cheap path for the dominant delta traffic: a canonically framed block
     # exposes its event type on the `event:` line, so no JSON parse is needed.
     # Full parsing remains for `error` frames and any block carrying an
@@ -3643,7 +3603,6 @@ async def stream_responses(
     enforce_openai_sdk_contract: bool = True,
     codex_lb_account_id: str | None = None,
     suppress_live_usage: bool = False,
-    native_egress_client: NativeEgressClient | None = None,
     synthesize_routing_hint: bool = False,
     thread_cache_identity: ThreadCacheIdentity | None = None,
 ) -> AsyncIterator[str]:
@@ -3670,7 +3629,6 @@ async def stream_responses(
                 enforce_openai_sdk_contract=enforce_openai_sdk_contract,
                 codex_lb_account_id=codex_lb_account_id,
                 suppress_live_usage=suppress_live_usage,
-                native_egress_client=native_egress_client,
                 synthesize_routing_hint=synthesize_routing_hint,
                 thread_cache_identity=thread_cache_identity,
             )
@@ -3703,7 +3661,6 @@ async def _stream_responses_with_session(
     enforce_openai_sdk_contract: bool = True,
     codex_lb_account_id: str | None = None,
     suppress_live_usage: bool = False,
-    native_egress_client: NativeEgressClient | None = None,
     synthesize_routing_hint: bool = False,
     thread_cache_identity: ThreadCacheIdentity | None = None,
 ) -> AsyncGenerator[str, None]:
@@ -3807,12 +3764,9 @@ async def _stream_responses_with_session(
         )
     )
     payload_dict = websocket_payload_dict if transport == "websocket" else http_payload_dict
-    active_native_egress_client = (
-        native_egress_client or discover_native_egress_client() if route is None and transport == "http" else None
-    )
     payload_json = (
         json.dumps(payload_dict, ensure_ascii=True, separators=(",", ":"))
-        if active_native_egress_client is not None or "upstream_payload" in settings.trace_channels
+        if "upstream_payload" in settings.trace_channels
         else None
     )
     if transport == "websocket":
@@ -3890,9 +3844,7 @@ async def _stream_responses_with_session(
 
         if route is not None:
             owns_codex_client = codex_client is None
-            active_codex_client = codex_client or CodexClient(
-                create_codex_session(), native_egress_client=native_egress_client
-            )
+            active_codex_client = codex_client or CodexClient(create_codex_session())
             raw_resp: Any = None
             try:
                 request_kwargs: dict[str, Any] = {
@@ -3902,10 +3854,6 @@ async def _stream_responses_with_session(
                     "timeout": remaining_request_timeout or request_total_timeout,
                     "buffer_response": False,
                 }
-                if not non_streaming_http:
-                    request_kwargs["native_sse"] = NativeSseOptions(
-                        effective_idle_timeout, MAX_SSE_EVENT_BYTES, interpret_responses=True
-                    )
                 request_with_metadata = getattr(active_codex_client, "request_with_route_metadata", None)
                 if callable(request_with_metadata):
                     result = await request_with_metadata("POST", url, route=route, **request_kwargs)
@@ -3916,9 +3864,7 @@ async def _stream_responses_with_session(
                     raw_resp = await active_codex_client.request("POST", url, route=route, **request_kwargs)
                     if route_trace is not None:
                         route_trace.record(route=route, fallback_used=False)
-                # Preserve the native response's framed-event interface. The
-                # raw-content adapter is only needed for Python transports.
-                resp = raw_resp if isinstance(raw_resp, NativeEgressResponse) else _CodexSSEResponse(raw_resp)
+                resp = _CodexSSEResponse(raw_resp)
                 status_code = resp.status
                 last_stream_activity_at = time.monotonic()
                 # Error responses (429/403) carry the saturated-window
@@ -4040,32 +3986,7 @@ async def _stream_responses_with_session(
                             raise cancellation
 
         @asynccontextmanager
-        async def _direct_response_context() -> AsyncIterator[aiohttp.ClientResponse | NativeEgressResponse]:
-            if active_native_egress_client is not None:
-                try:
-                    native_response = await active_native_egress_client.request(
-                        NativeEgressRequest(
-                            method="POST",
-                            url=url,
-                            headers=current_headers,
-                            body=cast(str, payload_json).encode("utf-8"),
-                            timeout_seconds=current_timeout.total or request_total_timeout,
-                            connect_timeout_seconds=current_timeout.sock_connect,
-                            response_head_timeout_seconds=current_timeout.sock_read,
-                            proxy_url=resolve_http_proxy_from_env(url),
-                            sse=(
-                                NativeSseOptions(effective_idle_timeout, MAX_SSE_EVENT_BYTES, interpret_responses=True)
-                                if not non_streaming_http
-                                else None
-                            ),
-                        )
-                    )
-                except NativeEgressUnavailable:
-                    pass
-                else:
-                    async with native_response:
-                        yield native_response
-                    return
+        async def _direct_response_context() -> AsyncIterator[aiohttp.ClientResponse]:
             async with client_session.post(
                 url,
                 json=payload_dict,
@@ -4441,55 +4362,6 @@ async def _stream_responses_with_session(
             ) from exc
         yield format_local_sse_event(
             synthetic_stream_failure_event(routed_error_code, response_error_message, response_id=get_request_id()),
-        )
-        return
-    except NativeEgressTransportError as exc:
-        retryable_same_contract = exc.retryable_same_contract
-        native_error_code = "upstream_unavailable" if retryable_same_contract else "upstream_error"
-        native_error_message = str(exc) or "Native upstream request failed"
-        error_code = native_error_code
-        error_message = native_error_message
-        failure_phase = exc.failure_phase
-        failure_detail = "native_transport_error"
-        failure_exception_type = type(exc).__name__
-        if raise_for_status and retryable_same_contract:
-            raise ProxyResponseError(
-                502,
-                openai_error(native_error_code, native_error_message),
-                failure_phase="connect",
-                retryable_same_contract=True,
-                failure_detail=failure_detail,
-                failure_exception_type=failure_exception_type,
-            ) from exc
-        # ``retryable_same_contract`` answers whether another account may be
-        # tried safely; it does not change the fact that this terminal was
-        # manufactured for a transport failure.  Preserve that provenance so
-        # the native-Codex boundary can turn even ambiguous (non-retryable)
-        # helper failures back into the direct-style missing-terminal
-        # lifecycle instead of leaking a synthetic ``response.failed``.
-        yield format_local_sse_event(
-            synthetic_transport_failure_event(
-                response_failed_event(
-                    native_error_code,
-                    native_error_message,
-                    response_id=get_request_id(),
-                )
-            ),
-        )
-        return
-    except (NativeEgressProtocolError, NativeEgressError) as exc:
-        native_error_code = "upstream_error"
-        native_error_message = str(exc) or "Native upstream protocol failed"
-        error_code = native_error_code
-        error_message = native_error_message
-        failure_phase = "upstream"
-        failure_detail = "native_protocol_error"
-        failure_exception_type = type(exc).__name__
-        retryable_same_contract = False
-        yield format_local_sse_event(
-            synthetic_transport_failure_event(
-                response_failed_event(native_error_code, native_error_message, response_id=get_request_id())
-            ),
         )
         return
     except aiohttp.ClientError as exc:
@@ -4952,46 +4824,16 @@ class _CompactCommandTransport:
             url=url,
             headers=upstream_headers,
         )
-        sse_options = NativeSseOptions(
-            compact_timeout_seconds or settings.stream_idle_timeout_seconds,
-            MAX_SSE_EVENT_BYTES,
-            content_type_aware=True,
-            collect_compact=True,
-        )
 
         @asynccontextmanager
-        async def _direct_response_context() -> AsyncIterator[aiohttp.ClientResponse | NativeEgressResponse]:
-            native_client = discover_native_egress_client()
-            if native_client is not None:
-                try:
-                    native_response = await native_client.request(
-                        NativeEgressRequest(
-                            method="POST",
-                            url=url,
-                            headers=upstream_headers,
-                            body=json.dumps(payload_dict, ensure_ascii=True, separators=(",", ":")).encode("utf-8"),
-                            timeout_seconds=compact_timeout_seconds,
-                            connect_timeout_seconds=effective_connect_timeout,
-                            response_head_timeout_seconds=compact_timeout_seconds,
-                            proxy_url=resolve_http_proxy_from_env(url),
-                            sse=sse_options,
-                        )
-                    )
-                except NativeEgressUnavailable:
-                    pass
-                else:
-                    async with native_response:
-                        yield native_response
-                    return
+        async def _direct_response_context() -> AsyncIterator[aiohttp.ClientResponse]:
             async with self.session.post(
                 url, json=payload_dict, headers=upstream_headers, timeout=timeout
             ) as python_response:
                 yield python_response
 
         @asynccontextmanager
-        async def _response_context() -> AsyncIterator[
-            aiohttp.ClientResponse | NativeEgressResponse | _CodexSSEResponse
-        ]:
+        async def _response_context() -> AsyncIterator[aiohttp.ClientResponse | _CodexSSEResponse]:
             if self.route is None:
                 async with _service_circuit_breaker_context(
                     cast(AsyncContextManager[aiohttp.ClientResponse], _direct_response_context()),
@@ -5009,7 +4851,6 @@ class _CompactCommandTransport:
                     "headers": upstream_headers,
                     "timeout": timeout,
                     "buffer_response": False,
-                    "native_sse": sse_options,
                 }
                 request_with_metadata = getattr(active_codex_client, "request_with_route_metadata", None)
                 if callable(request_with_metadata):
@@ -5021,9 +4862,7 @@ class _CompactCommandTransport:
                     raw_response = await active_codex_client.request("POST", url, route=self.route, **request_kwargs)
                     if self.route_trace is not None:
                         self.route_trace.record(route=self.route, fallback_used=False)
-                yield (
-                    raw_response if isinstance(raw_response, NativeEgressResponse) else _CodexSSEResponse(raw_response)
-                )
+                yield _CodexSSEResponse(raw_response)
             finally:
                 try:
                     if raw_response is not None:
@@ -5042,8 +4881,6 @@ class _CompactCommandTransport:
                 if resp.status >= 400:
                     if self.route is not None:
                         error_payload = await _codex_error_payload_from_response(resp)
-                    elif isinstance(resp, NativeEgressResponse):
-                        error_payload = await _error_payload_from_raw_body(cast(ErrorResponse, resp), await resp.read())
                     else:
                         error_payload = await _error_payload_from_response(cast(ErrorResponse, resp))
                     archive_json(
@@ -5102,7 +4939,7 @@ class _CompactCommandTransport:
                         exc,
                         upstream_status_code=resp.status,
                     ) from exc
-                except (ProxyResponseError, NativeEgressError):
+                except ProxyResponseError:
                     raise
                 except Exception as exc:
                     error_code = "upstream_error"
@@ -5169,39 +5006,6 @@ class _CompactCommandTransport:
                 retryable_same_contract=retryable_same_contract,
                 failure_detail=failure_detail,
                 failure_exception_type=failure_exception_type,
-            ) from exc
-        except NativeEgressError as exc:
-            transport_error = exc if isinstance(exc, NativeEgressTransportError) else None
-            failure_phase = (
-                "body_read"
-                if status_code is not None
-                else (transport_error.failure_phase if transport_error is not None else "protocol")
-            )
-            retryable_same_contract = bool(
-                status_code is None
-                and transport_error is not None
-                and transport_error.retryable_same_contract
-                and not transport_error.is_tls_verification_failure
-            )
-            process_failure = transport_error is not None and transport_error.failure_phase in {
-                "helper_exit",
-                "helper_read",
-                "helper_write",
-                "shutdown",
-            }
-            error_code = PROCESS_NETWORK_UNAVAILABLE_CODE if process_failure else "upstream_unavailable"
-            error_message = "Native compact upstream request failed"
-            failure_detail = "native_transport_error"
-            failure_exception_type = type(exc).__name__
-            raise ProxyResponseError(
-                502,
-                openai_error(error_code, error_message),
-                failure_phase=failure_phase,
-                retryable_same_contract=retryable_same_contract,
-                failure_detail=failure_detail,
-                failure_exception_type=failure_exception_type,
-                upstream_status_code=status_code,
-                failed_session=None,
             ) from exc
         except CodexTransportError as exc:
             error_code = exc.error_code or "upstream_unavailable"

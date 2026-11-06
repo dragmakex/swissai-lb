@@ -54,8 +54,8 @@ from app.modules.proxy.capability_routing import (
 pytestmark = pytest.mark.integration
 
 _REAL_WRITE_REQUEST_LOG = proxy_module.ProxyService._write_request_log
-_CODEX_CLIENT_CONFIG = Path(__file__).resolve().parents[2] / "docs/examples/codex/config.toml"
-_CODEX_DAYBREAK_PROFILE = Path(__file__).resolve().parents[2] / "docs/examples/codex/daybreak-blue.config.toml"
+_CODEX_CLIENT_CONFIG = Path(__file__).resolve().parents[2] / "tests/fixtures/codex/config.toml"
+_CODEX_DAYBREAK_PROFILE = Path(__file__).resolve().parents[2] / "tests/fixtures/codex/daybreak-blue.config.toml"
 
 
 @pytest.mark.asyncio
@@ -888,7 +888,7 @@ def test_codex_provider_profiles_route_before_first_account_attempt(
     assert provider["supports_websockets"] is True
     assert provider["requires_openai_auth"] is True
     if expected_security_requirement:
-        assert provider["env_key"] == "CODEX_LB_API_KEY"
+        assert provider["env_key"] == "SWISSAI_LB_API_KEY"
         assert normalized_provider_headers == {REQUIRED_CAPABILITY_HEADER: "trusted_cyber"}
     else:
         assert "env_key" not in provider

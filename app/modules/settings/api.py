@@ -740,7 +740,7 @@ _TIMEOUT_INVARIANT_DASHBOARD_SETTINGS: tuple[str, ...] = (
 
 # M4 model catalogue: per-model context window overrides. One dashboard row per
 # slug (``model_context_window_overrides``); the
-# ``CODEX_LB_MODEL_CONTEXT_WINDOW_OVERRIDES`` entry is the per-slug fallback.
+# ``SWISSAI_LB_MODEL_CONTEXT_WINDOW_OVERRIDES`` entry is the per-slug fallback.
 MODEL_CONTEXT_WINDOW_OVERRIDES_PATH = "/model-context-window-overrides"
 _MODEL_SLUG_MAX_LENGTH = 256
 

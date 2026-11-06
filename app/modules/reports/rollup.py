@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import case, delete, func, insert, literal, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.usage.identity import request_source_id_expr
 from app.core.usage.logs import CANCELLED_STATUS, NON_ERROR_STATUSES
 from app.core.utils.time import utcnow
 from app.db.models import AccountUsageRollupState, RequestLog, RequestReportHourlyRollup
@@ -57,7 +58,7 @@ def raw_measures() -> list:
 def report_fold_insert(session: AsyncSession, start: datetime, end: datetime):
     dimensions = [
         _requested_at_epoch_bucket_expr(session, 3600),
-        _dimension_expr(RequestLog.account_id),
+        _dimension_expr(request_source_id_expr()),
         _dimension_expr(RequestLog.api_key_id),
         RequestLog.model,
         _dimension_expr(RequestLog.useragent_group),

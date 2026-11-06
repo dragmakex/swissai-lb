@@ -84,7 +84,7 @@ export const USAGE_SECTION_LABELS: Record<UsageSection, string> = {
 
 export const ApiKeyCreateRequestSchema = z.object({
   name: z.string().min(1).max(128),
-  allowedModels: z.array(z.string()).optional(),
+  allowedModels: z.array(z.string()).nullable().optional(),
   applyToCodexModel: z.boolean().optional(),
   trafficClass: z.enum(TRAFFIC_CLASSES).optional(),
   transportPolicyOverride: z.enum(TRANSPORT_POLICY_OVERRIDES).nullable().optional(),
@@ -99,7 +99,7 @@ export const ApiKeyCreateRequestSchema = z.object({
   weeklyTokenLimit: z.number().int().positive().nullable().optional(),
   expiresAt: z.iso.datetime({ offset: true }).nullable().optional(),
   assignedAccountIds: z.array(z.string()).optional(),
-  assignedSourceIds: z.array(z.string()).optional(),
+  assignedSourceIds: z.array(z.string()).nullable().optional(),
   limits: z.array(LimitRuleCreateSchema).optional(),
 });
 
@@ -125,7 +125,7 @@ export const ApiKeyUpdateRequestSchema = z.object({
   expiresAt: z.iso.datetime({ offset: true }).nullable().optional(),
   isActive: z.boolean().optional(),
   assignedAccountIds: z.array(z.string()).optional(),
-  assignedSourceIds: z.array(z.string()).optional(),
+  assignedSourceIds: z.array(z.string()).nullable().optional(),
   limits: z.array(LimitRuleCreateSchema).optional(),
   resetUsage: z.boolean().optional(),
 });

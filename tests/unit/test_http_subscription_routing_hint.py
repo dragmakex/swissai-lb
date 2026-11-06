@@ -65,7 +65,6 @@ async def loopback(
 
             monkeypatch.setattr(client, "lease_http_session", local_lease)
             monkeypatch.setattr(forwarding, "lease_model_source_session", local_lease)
-            monkeypatch.setattr(client, "discover_native_egress_client", lambda: None)
             monkeypatch.setattr(get_settings(), "upstream_base_url", str(server.make_url("/backend-api")))
             yield server, received, completed
     finally:

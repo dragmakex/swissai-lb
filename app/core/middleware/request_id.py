@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from uuid import uuid4
 
 from fastapi import FastAPI
@@ -29,7 +30,8 @@ def _inbound_request_id(scope: Scope) -> str | None:
     inbound = x_request_id or request_id
     if not inbound:
         return None
-    return inbound.decode("latin-1")
+    value = inbound.decode("latin-1")
+    return value if re.fullmatch(r"[A-Za-z0-9_.:-]{1,64}", value) else None
 
 
 class RequestIdMiddleware:

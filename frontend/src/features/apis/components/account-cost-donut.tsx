@@ -3,7 +3,6 @@ import { useTranslation } from "react-i18next";
 import { Cell, Pie, PieChart, Sector, type PieSectorShapeProps } from "@/components/lazy-recharts";
 
 import { buildDonutPalette } from "@/utils/colors";
-import { formatCurrency } from "@/utils/formatters";
 import { usePrivacyStore } from "@/hooks/use-privacy";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { useThemeStore } from "@/hooks/use-theme";
@@ -150,7 +149,7 @@ export function AccountCostDonut({ accountCosts, totalCostUsd }: AccountCostDonu
             <div className="absolute inset-[22px] flex items-center justify-center rounded-full text-center pointer-events-none">
               <div>
                 <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">{t("apis.accountCost.centerLabel")}</p>
-                <p className="text-base font-semibold tabular-nums">{formatCurrency(totalCostUsd)}</p>
+                <p className="text-base font-semibold tabular-nums">{"—"}</p>
               </div>
             </div>
           </div>
@@ -197,7 +196,7 @@ export function AccountCostDonut({ accountCosts, totalCostUsd }: AccountCostDonu
                     </span>
                   </div>
                   <span className="shrink-0 tabular-nums text-muted-foreground">
-                    {formatCurrency(item.value)}
+                    {"—"}
                   </span>
                 </button>
               );

@@ -10,6 +10,7 @@ from app.core.usage.logs import (
     output_tokens_from_log,
     total_tokens_from_log,
 )
+from app.core.usage.pricing import UsageCostBreakdown
 from app.db.models import RequestLog
 from app.modules.request_logs.schemas import RequestLogCostBreakdown, RequestLogEntry
 
@@ -41,7 +42,11 @@ def to_request_log_entry(
     include_api_key_identity: bool = True,
 ) -> RequestLogEntry:
     log_like = typing_cast(RequestLogLike, log)
-    cost_breakdown = cost_breakdown_from_log(log_like, precision=6)
+    cost_breakdown = (
+        UsageCostBreakdown(None, None, None, None)
+        if log.model_source_kind == "swissai"
+        else cost_breakdown_from_log(log_like, precision=6)
+    )
     return RequestLogEntry(
         sticky_key_source=log.sticky_key_source if include_sensitive_metadata else None,
         sticky_kind=log.sticky_kind if include_sensitive_metadata else None,
@@ -60,6 +65,8 @@ def to_request_log_entry(
         source=log.source,
         model_source_id=log.model_source_id,
         model_source_kind=log.model_source_kind,
+        route=log.route,
+        stream=log.stream,
         useragent=log.useragent if include_sensitive_metadata else None,
         useragent_group=log.useragent_group,
         client_ip=log.client_ip if include_sensitive_metadata else None,

@@ -20,6 +20,17 @@ function extractHandlerPaths(): string[] {
 // All API endpoints consumed by the frontend (method + MSW path pattern).
 // Parameterized segments use MSW `:param` syntax.
 const EXPECTED_ENDPOINTS = [
+	// SwissAI production adapter
+	"GET /api/swissai-keys",
+	"POST /api/swissai-keys",
+	"PATCH /api/swissai-keys/:keyId",
+	"DELETE /api/swissai-keys/:keyId",
+	"POST /api/swissai-keys/:keyId/pause",
+	"POST /api/swissai-keys/:keyId/resume",
+	"POST /api/swissai-keys/:keyId/probe",
+	"GET /api/swissai/catalog",
+	"GET /api/swissai/settings",
+	"PUT /api/swissai/settings",
 	// health
 	"GET /health",
 	"GET /health/ready",

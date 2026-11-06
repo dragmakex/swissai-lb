@@ -25,6 +25,7 @@ import {
 	ApiKeyTrendsResponseSchema,
 	ApiKeyUsage7DayResponseSchema,
 } from "@/features/apis/schemas";
+import type { SwissAIKey } from "@/features/swissai/hooks";
 import type { ModelSource } from "@/features/model-sources/schemas";
 import { ModelSourceSchema } from "@/features/model-sources/schemas";
 import type { AccessSummary, AuthSession, AuthSessionUser } from "@/features/auth/schemas";
@@ -177,6 +178,14 @@ export function createDefaultAccounts(): AccountSummary[] {
 			},
 		}),
 	];
+}
+
+export function createSwissAIKey(overrides: Partial<SwissAIKey> = {}): SwissAIKey {
+  return {
+    id: "sak_fixture", name: "Primary SwissAI key", keyPrefix: "sk-rc-…0001", status: "active", enabled: true,
+    cooldownUntil: null, failureReason: null, maxConcurrency: 4, inFlight: 0,
+    lastSuccessAt: null, lastFailureAt: null, createdAt: offsetIso(-30), ...overrides,
+  };
 }
 
 export function createModelSource(
@@ -994,7 +1003,7 @@ export function createDashboardSettings(
 		rateLimitResetCreditsRefreshEnabled: true,
 		// M5 conversation archive
 		conversationArchiveEnabled: false,
-		conversationArchiveDir: "/var/lib/codex-lb/conversation-archive",
+		conversationArchiveDir: "/var/lib/swissai-lb/conversation-archive",
 		// R2 spool retention: the 7-day default and the floor at shipped defaults.
 		httpResponsesSessionBridgeOperationSpoolRetentionSeconds: 604800,
 		httpResponsesSessionBridgeOperationSpoolRetentionFloorSeconds: 7200,

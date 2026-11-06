@@ -1,8 +1,6 @@
 import { Monitor, Moon, Palette, Sun } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
-import { Switch } from "@/components/ui/switch";
-import { useAccountQuotaDisplayStore, type AccountQuotaDisplayPreference } from "@/hooks/use-account-quota-display";
 import {
   useDashboardPreferencesStore,
   type DashboardRefreshSeconds,
@@ -30,38 +28,12 @@ const DATE_FORMAT_OPTIONS: { value: DateDisplayFormat; labelKey: string }[] = [
 
 const REFRESH_OPTIONS: DashboardRefreshSeconds[] = [5, 15, 30, 60];
 
-const QUOTA_DISPLAY_OPTIONS: {
-  value: AccountQuotaDisplayPreference;
-  labelKey: string;
-  descriptionKey: string;
-}[] = [
-  {
-    value: "5h",
-    labelKey: "settings.appearance.accountRows.fiveHour",
-    descriptionKey: "settings.appearance.accountRows.fiveHourDescription",
-  },
-  {
-    value: "weekly",
-    labelKey: "settings.appearance.accountRows.weekly",
-    descriptionKey: "settings.appearance.accountRows.weeklyDescription",
-  },
-  {
-    value: "both",
-    labelKey: "settings.appearance.accountRows.both",
-    descriptionKey: "settings.appearance.accountRows.bothDescription",
-  },
-];
-
 export function AppearanceSettings() {
   const { t } = useTranslation();
   const preference = useThemeStore((s) => s.preference);
   const setTheme = useThemeStore((s) => s.setTheme);
   const timeFormat = useTimeFormatStore((s) => s.timeFormat);
   const setTimeFormat = useTimeFormatStore((s) => s.setTimeFormat);
-  const quotaDisplay = useAccountQuotaDisplayStore((s) => s.quotaDisplay);
-  const setQuotaDisplay = useAccountQuotaDisplayStore((s) => s.setQuotaDisplay);
-  const accountBurnrateEnabled = useDashboardPreferencesStore((s) => s.accountBurnrateEnabled);
-  const setAccountBurnrateEnabled = useDashboardPreferencesStore((s) => s.setAccountBurnrateEnabled);
   const dateDisplayFormat = useDateDisplayFormatStore((s) => s.dateDisplayFormat);
   const setDateDisplayFormat = useDateDisplayFormatStore((s) => s.setDateDisplayFormat);
   const refreshSeconds = useDashboardPreferencesStore((s) => s.refreshSeconds);
@@ -161,32 +133,6 @@ export function AppearanceSettings() {
 
           <div className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="text-sm font-medium">{t("settings.appearance.accountRows.label")}</p>
-              <p className="text-xs text-muted-foreground">{t("settings.appearance.accountRows.description")}</p>
-            </div>
-            <div className="flex items-center gap-1 rounded-lg border border-border/50 bg-muted/40 p-0.5">
-              {QUOTA_DISPLAY_OPTIONS.map(({ value, labelKey, descriptionKey }) => (
-                <button
-                  key={value}
-                  type="button"
-                  aria-pressed={quotaDisplay === value}
-                  title={t(descriptionKey)}
-                  onClick={() => setQuotaDisplay(value)}
-                  className={cn(
-                    "rounded-md px-3 py-1.5 text-left text-xs font-medium transition-colors duration-200",
-                    quotaDisplay === value
-                      ? "bg-background text-foreground shadow-[var(--shadow-xs)]"
-                      : "text-muted-foreground hover:text-foreground",
-                  )}
-                >
-                  <span className="block">{t(labelKey)}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
               <p className="text-sm font-medium">{t("settings.appearance.refreshRate.label")}</p>
               <p className="text-xs text-muted-foreground">{t("settings.appearance.refreshRate.description")}</p>
             </div>
@@ -210,17 +156,6 @@ export function AppearanceSettings() {
             </div>
           </div>
 
-          <div className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-sm font-medium">{t("settings.appearance.burnProjection.label")}</p>
-              <p className="text-xs text-muted-foreground">{t("settings.appearance.burnProjection.description")}</p>
-            </div>
-            <Switch
-              aria-label={t("settings.appearance.burnProjection.ariaLabel")}
-              checked={accountBurnrateEnabled}
-              onCheckedChange={setAccountBurnrateEnabled}
-            />
-          </div>
         </div>
       </div>
     </section>

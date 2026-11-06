@@ -1681,14 +1681,13 @@ class _PrewarmingBridgeUpstreamWebSocket(_FakeBridgeUpstreamWebSocket):
 @pytest.mark.asyncio
 async def test_http_bridge_routing_hint_is_first_handshake_only(async_client, monkeypatch):
     from app.core.clients import proxy_websocket as websocket_client
-    from app.core.clients.native_egress import NativeWebSocketMessage, NativeWebSocketRequest
 
     # Given real bridge selection, request preparation and client header building.
     _install_bridge_settings(monkeypatch, enabled=True)
     account_id = await _import_account(async_client, "acc_hint_reuse", "hint-reuse@example.com")
     account = await _get_account(account_id)
     upstream = _FakeBridgeUpstreamWebSocket("resp_hint_reuse")
-    handshakes: list[NativeWebSocketRequest] = []
+    handshakes: list[dict[str, str]] = []
 
     async def select_account(self, deadline, **kwargs):
         return AccountSelection(account=account, error_message=None, error_code=None)
@@ -1696,26 +1695,21 @@ async def test_http_bridge_routing_hint_is_first_handshake_only(async_client, mo
     async def ensure_fresh(self, target, *, force=False, timeout_seconds):
         return target
 
-    async def receive_native():
-        message = await upstream.receive()
-        return NativeWebSocketMessage(kind=message.kind, text=message.text)
+    class PythonConnection:
+        async def send(self, text):
+            await upstream.send_text(text)
 
-    async def close_native(code=1000, reason=""):
-        await upstream.close()
+        async def recv(self):
+            return (await upstream.receive()).text
 
-    native_socket = Mock()
-    native_socket.send_text = upstream.send_text
-    native_socket.receive = receive_native
-    native_socket.close = close_native
-    native_socket.response_header = upstream.response_header
+        async def close(self, code=1000, reason=""):
+            await upstream.close()
 
-    async def connect_native(request: NativeWebSocketRequest):
-        handshakes.append(request)
-        return native_socket
+    async def connect_python(_url, *, additional_headers, **_kwargs):
+        handshakes.append(dict(additional_headers))
+        return PythonConnection()
 
-    native_client = Mock()
-    native_client.websocket = connect_native
-    monkeypatch.setattr(websocket_client, "discover_native_egress_client", lambda: native_client)
+    monkeypatch.setattr(websocket_client, "websocket_connect", connect_python)
     monkeypatch.setattr(proxy_module.ProxyService, "_select_account_with_budget", select_account)
     monkeypatch.setattr(proxy_module.ProxyService, "_ensure_fresh_with_budget", ensure_fresh)
 
@@ -1749,7 +1743,7 @@ async def test_http_bridge_routing_hint_is_first_handshake_only(async_client, mo
     # Then the first header remains; second-frame tier absence never reconnects.
     assert any(event["type"] == "response.completed" for event in second)
     assert len(handshakes) == 1
-    assert handshakes[0].headers.get("x-codex-routing-hint") == "model=gpt-5.4;tier=priority"
+    assert handshakes[0].get("x-codex-routing-hint") == "model=gpt-5.4;tier=priority"
     frames = [json.loads(text) for text in upstream.sent_text]
     assert len(frames) == 2
     assert frames[0]["service_tier"] == "priority"

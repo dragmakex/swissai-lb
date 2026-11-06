@@ -81,7 +81,7 @@ def test_main_validates_selected_port_before_loading_uvicorn(monkeypatch):
         pytest.fail("Uvicorn must not load when the selected port conflicts with the metrics port")
 
     monkeypatch.setenv("PORT", "2455")
-    monkeypatch.setenv("CODEX_LB_METRICS_PORT", "9090")
+    monkeypatch.setenv("SWISSAI_LB_METRICS_PORT", "9090")
     monkeypatch.setattr(cli, "_load_uvicorn", fail_load_uvicorn)
 
     with pytest.raises(ValueError, match="metrics_port must not match the main application port \\(9090\\)"):

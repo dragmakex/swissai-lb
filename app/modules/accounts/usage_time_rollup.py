@@ -64,6 +64,7 @@ from sqlalchemy import BigInteger, ColumnElement, Integer, and_, case, cast, del
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.elements import SQLCoreOperations
 
+from app.core.usage.identity import request_source_id_expr
 from app.core.usage.logs import CANCELLED_STATUS, NON_ERROR_STATUSES
 from app.core.utils.time import utcnow
 from app.db.models import (
@@ -501,7 +502,7 @@ def _requested_at_epoch_bucket_expr(session: AsyncSession, bucket_seconds: int) 
 
 def _hourly_fold_insert(session: AsyncSession, window: tuple[ColumnElement, ...]):
     bucket = _requested_at_epoch_bucket_expr(session, HOURLY_BUCKET_SECONDS).label("bucket_epoch")
-    account_id = _dimension_expr(RequestLog.account_id).label("account_id")
+    account_id = _dimension_expr(request_source_id_expr()).label("account_id")
     api_key_id = _dimension_expr(RequestLog.api_key_id).label("api_key_id")
     service_tier = _dimension_expr(RequestLog.service_tier).label("service_tier")
     is_deleted = RequestLog.deleted_at.is_not(None).label("is_deleted")
@@ -548,7 +549,7 @@ def _hourly_fold_insert(session: AsyncSession, window: tuple[ColumnElement, ...]
 
 def _error_fold_insert(session: AsyncSession, window: tuple[ColumnElement, ...]):
     bucket = _requested_at_epoch_bucket_expr(session, HOURLY_BUCKET_SECONDS).label("bucket_epoch")
-    account_id = _dimension_expr(RequestLog.account_id).label("account_id")
+    account_id = _dimension_expr(request_source_id_expr()).label("account_id")
     # Exact reproduction of the top-error read filter: warmup kinds excluded,
     # soft-deleted rows INCLUDED, cancelled terminals excluded (they are not
     # errors; buckets folded before that exclusion still carry
@@ -573,7 +574,7 @@ def _demand_fold_insert(session: AsyncSession, window: tuple[ColumnElement, ...]
     # folding to a coarser grain would shrink forecasts wherever one slot
     # mixes groups with different dominant components.
     slot = _requested_at_epoch_bucket_expr(session, QUARTER_SLOT_SECONDS).label("slot_epoch")
-    account_id = _dimension_expr(RequestLog.account_id).label("account_id")
+    account_id = _dimension_expr(request_source_id_expr()).label("account_id")
     api_key_id = _dimension_expr(RequestLog.api_key_id).label("api_key_id")
     reasoning_effort = _dimension_expr(RequestLog.reasoning_effort).label("reasoning_effort")
     is_deleted = RequestLog.deleted_at.is_not(None).label("is_deleted")
@@ -625,7 +626,7 @@ def _conversation_fold_conditions() -> tuple[ColumnElement[bool], ...]:
 def _conversation_fold_insert(session: AsyncSession, window: tuple[ColumnElement, ...]):
     bucket = _requested_at_epoch_bucket_expr(session, HOURLY_BUCKET_SECONDS).label("bucket_epoch")
     conversation_id = conversation_id_expr().label("conversation_id")
-    account_id = _dimension_expr(RequestLog.account_id).label("account_id")
+    account_id = _dimension_expr(request_source_id_expr()).label("account_id")
     is_deleted = RequestLog.deleted_at.is_not(None).label("is_deleted")
     stmt = (
         select(bucket, conversation_id, account_id, is_deleted, func.count(RequestLog.id))

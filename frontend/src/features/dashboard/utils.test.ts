@@ -1167,7 +1167,7 @@ describe("buildDashboardView", () => {
     expect(burn.meta).toBe("Projected account-equivalents: 0.0/5h · 1.0/7d");
   });
 
-  it("shows only the averaged cost text on the estimated cost card", () => {
+  it("keeps SwissAI pricing unknown for daily and weekly windows", () => {
     const weeklyView = buildDashboardView(
       createDashboardOverview({
         summary: {
@@ -1248,11 +1248,13 @@ describe("buildDashboardView", () => {
       false,
     );
 
-    expect(weeklyView.stats[2]?.meta).toBe("Avg/day $8.00");
-    expect(dailyView.stats[2]?.meta).toBe("Avg/hr $1.00");
+    expect(weeklyView.stats[2]?.value).toBe("—");
+    expect(dailyView.stats[2]?.value).toBe("—");
+    expect(weeklyView.stats[2]?.meta).toBe("SwissAI pricing is unknown");
+    expect(dailyView.stats[2]?.meta).toBe("SwissAI pricing is unknown");
   });
 
-  it("adds previous-window comparison indicators to requests tokens and cost cards", () => {
+  it("compares requests and tokens without inventing a cost comparison", () => {
     const overview = createDashboardOverview();
 
     const view = buildDashboardView(
@@ -1290,7 +1292,7 @@ describe("buildDashboardView", () => {
 
     expect(view.stats[0]?.comparison).toEqual({ text: "▲ 50%", tone: "positive" });
     expect(view.stats[1]?.comparison).toEqual({ text: "▼ 50%", tone: "negative" });
-    expect(view.stats[2]?.comparison).toEqual({ text: "▲ 50%", tone: "positive" });
+    expect(view.stats[2]?.comparison).toBeUndefined();
     expect(view.stats[view.stats.length - 1]?.comparison).toBeUndefined();
   });
 

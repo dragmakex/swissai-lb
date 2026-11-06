@@ -8,7 +8,8 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import and_, case, func, literal, or_, select, union_all
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import Account, RequestLog
+from app.core.usage.identity import request_source_id_expr
+from app.db.models import Account, ModelSource, RequestLog
 from app.modules.reports.filters import (
     MISSING_USERAGENT_GROUP,
     _normal_traffic_clause,
@@ -208,12 +209,13 @@ class ReportsRepository:
         result = await self._session.execute(
             select(
                 source.c.account_id,
-                Account.alias,
+                func.coalesce(ModelSource.name, Account.alias).label("alias"),
                 func.sum(source.c.cost_usd).label("cost_usd"),
                 func.sum(source.c.request_count).label("request_count"),
             )
             .outerjoin(Account, Account.id == source.c.account_id)
-            .group_by(source.c.account_id, Account.alias)
+            .outerjoin(ModelSource, ModelSource.id == source.c.account_id)
+            .group_by(source.c.account_id, ModelSource.name, Account.alias)
             .order_by(func.sum(source.c.cost_usd).desc(), source.c.account_id)
         )
         return [
@@ -334,7 +336,7 @@ def _report_conditions(
         _normal_traffic_clause(),
     ]
     if account_ids:
-        conditions.append(RequestLog.account_id.in_(account_ids))
+        conditions.append(request_source_id_expr().in_(account_ids))
     if model:
         conditions.append(RequestLog.model == model)
     useragent_group_clause = _useragent_group_filter_clause(useragent_group)
@@ -373,7 +375,7 @@ def _daily_speed_medians_stmt(
             RequestLog.requested_at >= day_ranges_cte.c.day_start,
             RequestLog.requested_at < day_ranges_cte.c.day_end,
             _normal_traffic_clause(),
-            *([RequestLog.account_id.in_(account_ids)] if account_ids else []),
+            *([request_source_id_expr().in_(account_ids)] if account_ids else []),
             *([RequestLog.model == model] if model else []),
             *([useragent_group_clause] if useragent_group_clause is not None else []),
             *([RequestLog.api_key_id.in_(api_key_ids)] if api_key_ids else []),

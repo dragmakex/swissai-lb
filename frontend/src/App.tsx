@@ -19,7 +19,6 @@ import { AuthGate } from "@/features/auth/components/auth-gate";
 import { StepUpDialog } from "@/features/auth/components/step-up-dialog";
 import { hasPermission, useAuthStore } from "@/features/auth/hooks/use-auth";
 import { signedInLoginDestination } from "@/features/auth/oidc-window";
-import { TelemetryConsentDialog } from "@/features/settings/components/telemetry-consent-dialog";
 import { useTimeFormatStore } from "@/hooks/use-time-format";
 
 // Route-level code splitting: only the visited page's chunk loads, instead
@@ -31,10 +30,7 @@ const ReportsPage = lazy(() =>
   import("@/features/reports/components/reports-page").then((m) => ({ default: m.ReportsPage })),
 );
 const AccountsPage = lazy(() =>
-  import("@/features/accounts/components/accounts-page").then((m) => ({ default: m.AccountsPage })),
-);
-const AutomationsPage = lazy(() =>
-  import("@/features/automations/components/automations-page").then((m) => ({ default: m.AutomationsPage })),
+  import("@/features/swissai/keys-page").then((m) => ({ default: m.SwissAIKeysPage })),
 );
 const ApisPage = lazy(() => import("@/features/apis/components/apis-page").then((m) => ({ default: m.ApisPage })));
 const SettingsPage = lazy(() =>
@@ -94,7 +90,6 @@ function AppLayout() {
         </RouteErrorBoundary>
       </main>
       <StatusBar onHeightChange={setStatusBarHeight} />
-      <TelemetryConsentDialog />
     </div>
   );
 }
@@ -119,7 +114,6 @@ export default function App() {
               <Route path="/dashboard" element={<DashboardPage />} />
               <Route path="/reports" element={<ReportsPage />} />
               <Route path="/accounts" element={<AccountsPage />} />
-              <Route path="/automations" element={<AutomationsPage />} />
               <Route path="/apis" element={<ApisPage />} />
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/settings/access" element={<AccessPage />} />

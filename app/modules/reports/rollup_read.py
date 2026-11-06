@@ -8,6 +8,7 @@ from sqlalchemy import BigInteger, case, cast, func, literal, select, union_all
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.selectable import Subquery
 
+from app.core.usage.identity import request_source_id_expr
 from app.db.models import AccountUsageRollupState, RequestLog, RequestReportHourlyRollup
 from app.modules.accounts.usage_time_rollup import DIMENSION_SENTINEL, conversation_id_expr
 from app.modules.accounts.usage_time_rollup_read import ceil_to_grid, epoch_seconds, floor_to_grid
@@ -70,7 +71,7 @@ def report_source(
         _decode(r.conversation_id).label("conversation_id"),
     ]
     raw_dimensions = [
-        RequestLog.account_id,
+        request_source_id_expr().label("account_id"),
         RequestLog.api_key_id,
         RequestLog.model,
         RequestLog.useragent_group,
@@ -137,7 +138,7 @@ def report_source(
         folded_filters = []
         raw_filters = []
         for selected, rc, lc in (
-            (account_ids, r.account_id, RequestLog.account_id),
+            (account_ids, r.account_id, request_source_id_expr()),
             (api_key_ids, r.api_key_id, RequestLog.api_key_id),
         ):
             if selected:

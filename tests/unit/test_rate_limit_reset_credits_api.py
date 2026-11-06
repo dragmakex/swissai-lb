@@ -1511,13 +1511,16 @@ async def test_consume_handler_keeps_selection_cache_on_transient_refresh_error(
 
 
 @pytest.mark.asyncio
-async def test_consume_refuses_read_only_guest(app_instance, async_client) -> None:  # type: ignore[no-untyped-def]
+async def test_consume_refuses_read_only_guest(app_instance, async_client, monkeypatch) -> None:  # type: ignore[no-untyped-def]
     async def _guest_refused(_request: Any = None) -> None:
         raise DashboardPermissionError(
             "Read-only dashboard access cannot modify dashboard state",
             code="read_only_access",
         )
 
+    # Exercise the retained legacy controller in isolation; production does not install it.
+    monkeypatch.setattr(app_instance.router, "routes", list(app_instance.router.routes))
+    app_instance.include_router(reset_credits_api.router)
     app_instance.dependency_overrides[require_dashboard_permission(Permission.ACCOUNTS_WRITE)] = _guest_refused
     try:
         response = await async_client.post("/api/accounts/acc_guest/rate-limit-reset-credits/consume")

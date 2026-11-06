@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Render ``docs/reference/settings.md`` from ``Settings.model_fields``.
+"""Render the OpenSpec settings reference from ``Settings.model_fields``.
 
 Usage::
 
     uv run python scripts/generate_settings_reference.py
 
-The generated page is checked in so the docs build stays hermetic;
+The generated page is checked in alongside its owning capability;
 ``tests/unit/test_settings_reference.py`` regenerates it and fails when the
 page drifts from ``app/core/config/settings.py``.
 """
@@ -27,15 +27,15 @@ from app.core.config.tiers import DASHBOARD_HOMES, SETTING_TIERS
 from app.db.models import DashboardSettings
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-OUTPUT_PATH = REPO_ROOT / "docs" / "reference" / "settings.md"
+OUTPUT_PATH = REPO_ROOT / "openspec" / "specs" / "configuration-tiers" / "reference.md"
 
-ENV_PREFIX = "CODEX_LB_"
+ENV_PREFIX = "SWISSAI_LB_"
 
 # Defaults computed from the runtime environment (home directory, container
 # detection, hostname, outbound proxy env vars). Rendered symbolically so the
 # generated page is machine-independent and deterministic.
 _SYMBOLIC_DEFAULTS: dict[str, str] = {
-    "data_dir": "`~/.codex-lb` (host) / `/var/lib/codex-lb` (container)",
+    "data_dir": "`~/.swissai-lb` (host) / `/var/lib/swissai-lb` (container)",
     "database_url": "`sqlite+aiosqlite:///<data_dir>/store.db`",
     "encryption_key_file": "`<data_dir>/encryption.key`",
     "conversation_archive_dir": "`<data_dir>/conversation-archive`",
@@ -99,14 +99,14 @@ _EXACT_SECTIONS: dict[str, str] = {
     "forwarded_allow_ips": "Firewall",
 }
 
-# Process-level environment variables codex-lb honors that are NOT Settings
+# Process-level environment variables the application honors that are NOT Settings
 # fields: third-party or POSIX conventions read by the launcher, libraries, or
 # frozen Alembic migrations. Listed so operators can find them and so the
 # ``os.environ``-outside-Settings lint allowlist has a documented source.
 _PROCESS_ENV_CONVENTIONS: tuple[tuple[str, str], ...] = (
     (
         "`HOST`, `PORT`, `SSL_CERTFILE`, `SSL_KEYFILE`, `UVICORN_TIMEOUT_KEEP_ALIVE`, `UVICORN_WS_MAX_SIZE`",
-        "Uvicorn launch defaults read once by the `codex-lb` CLI (`app/cli.py`); host runs only.",
+        "Uvicorn launch defaults read once by the `swissai-lb` CLI (`app/cli.py`); host runs only.",
     ),
     (
         "`HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, `WS_PROXY`, `NO_PROXY` (and lowercase)",
@@ -135,14 +135,14 @@ _PROCESS_ENV_CONVENTIONS: tuple[tuple[str, str], ...] = (
     ),
     (
         "`CODEX_HOME`, `USERPROFILE`, `WSL_DISTRO_NAME`",
-        "Codex CLI home discovery for the `codex-lb codex-sessions retag` tool.",
+        "Codex CLI home discovery for the retained `swissai-lb codex-sessions retag` compatibility tool.",
     ),
     (
-        "`CODEX_LB_TEST_DATABASE_URL`",
+        "`SWISSAI_LB_TEST_DATABASE_URL`",
         "Test-suite/CI only: overrides the database used by the test session factory.",
     ),
     (
-        "`CODEX_LB_ADDITIONAL_QUOTA_REGISTRY_FILE` (inside `app/db/alembic/versions/**` only)",
+        "`SWISSAI_LB_ADDITIONAL_QUOTA_REGISTRY_FILE` (inside `app/db/alembic/versions/**` only)",
         "Frozen Alembic migrations read the process environment directly because migrations must not "
         "depend on `Settings`; the live setting of the same name is documented in the tables below.",
     ),
@@ -288,12 +288,13 @@ def render_settings_reference() -> str:
         "`tests/unit/test_settings_reference.py` fails when this page drifts from",
         "`app/core/config/settings.py`.",
         "",
-        f"codex-lb currently exposes {len(fields)} settings. Every setting is an environment",
+        f"SwissAI LB retains {len(fields)} inherited application settings. Every setting is an environment",
         f"variable, normally with the `{ENV_PREFIX}` prefix (process environment or `.env` /",
         "`.env.local` next to the process); aliased settings list every accepted name.",
         "All defaults work with zero configuration —",
-        "start from [Configuration](../configuration.md) for the handful that matter,",
-        "and treat everything else as advanced operational tunables.",
+        "start from [SwissAI operations](../swissai-key-pool/context.md) for the supported setup.",
+        "Inherited OAuth/bridge settings do not enable retired ChatGPT inference routes.",
+        "Treat the remaining reference as advanced operational tunables.",
         "",
         "## Tiers",
         "",
@@ -323,22 +324,20 @@ def render_settings_reference() -> str:
         "`.env` / `.env.local` are discovered next to the installed module root (the",
         f"repository checkout). `{ENV_PREFIX}ENV_FILE` — an `os.pathsep`-separated list",
         "of paths — overrides that discovery for installs whose module root cannot",
-        "contain env files (the Nix package wrapper points it at the launch",
-        "directory). It must be set in the process environment, not in an env file:",
+        "contain env files. It must be set in the process environment, not in an env file:",
         "the env-file locations have to be known before env files are read.",
         "",
         f"## `{ENV_PREFIX}WORKERS_PER_INSTANCE` (special case, startup guard)",
         "",
         "Not a setting: the only supported value is `1` (one worker process per",
         "instance), so there is nothing to configure. If it is set to anything else,",
-        "startup fails with a settings validation error — per-account concurrency caps",
-        "are partitioned per replica via the bridge ring, and multiple worker processes",
-        "inside one instance would silently multiply them. Scale horizontally via",
-        "replicas instead.",
+        "startup fails with a settings validation error. The supported default is one",
+        "application process using SQLite; optional PostgreSQL coordination does not",
+        "make multiple workers within one instance supported.",
         "",
         "## Process-level environment variables (not settings)",
         "",
-        "These are third-party or POSIX conventions codex-lb honors without",
+        "These are third-party or POSIX conventions the retained application honors without",
         "making them settings. They are read by their owning launcher, library, or",
         "frozen migration rather than through `Settings`. Together with `Settings`",
         "itself this table is the allowlist of environment reads under `app/`;",
@@ -363,16 +362,8 @@ def render_settings_reference() -> str:
             "",
             "## Removed",
             "",
-            "Images and default account probes choose `gpt-5.6-luna`, then `gpt-5.5`,",
-            "using registry plan visibility and suppression. If neither qualifies, they",
-            "use `gpt-5.6-luna`. Catalog visibility does not guarantee account access.",
-            "There is no host-model setting. See the",
-            "[Images spec](https://github.com/Soju06/codex-lb/tree/main/openspec/specs/images-api-compat)",
-            "and [probe spec](https://github.com/Soju06/codex-lb/tree/main/openspec/specs/usage-refresh-policy).",
-            "",
             "Removed settings (ignored with a one-release startup warning; each is now a",
-            "fixed default or a dashboard runtime setting — see PRINCIPLES.md P2 /",
-            "issue [#1340](https://github.com/Soju06/codex-lb/issues/1340)):",
+            "fixed default or a dashboard runtime setting — see [configuration policy](spec.md)):",
             "",
         ]
     )
@@ -382,16 +373,9 @@ def render_settings_reference() -> str:
             "",
             "---",
             "",
-            "*Specs: [user-documentation]"
-            "(https://github.com/Soju06/codex-lb/tree/main/openspec/specs/user-documentation) · "
-            "[responses-api-compat]"
-            "(https://github.com/Soju06/codex-lb/tree/main/openspec/specs/responses-api-compat) · "
-            "[rate-limit-reset-credits]"
-            "(https://github.com/Soju06/codex-lb/tree/main/openspec/specs/rate-limit-reset-credits) · "
-            "[deployment-installation]"
-            "(https://github.com/Soju06/codex-lb/tree/main/openspec/specs/deployment-installation) · "
-            "[proxy-runtime-observability]"
-            "(https://github.com/Soju06/codex-lb/tree/main/openspec/specs/proxy-runtime-observability)*",
+            "*Owner: [configuration-tiers](spec.md). "
+            "See also [user-documentation](../user-documentation/spec.md) and "
+            "[SwissAI key pool](../swissai-key-pool/spec.md).*",
             "",
         ]
     )

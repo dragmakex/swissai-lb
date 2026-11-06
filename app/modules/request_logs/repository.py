@@ -38,6 +38,7 @@ from app.db.models import (
     RequestLog,
     RequestUsageHourlyErrorRollup,
     RequestUsageHourlyRollup,
+    SwissAIAttempt,
 )
 from app.db.session import relax_commit_durability, sqlite_writer_section
 from app.modules.accounts.usage_rollup import lock_fold_state
@@ -987,6 +988,16 @@ class RequestLogsRepository:
             return rollup_earliest
         return raw_earliest
 
+    async def swissai_attempts(self, request_ids: list[str]) -> list[SwissAIAttempt]:
+        if not request_ids:
+            return []
+        result = await self._session.scalars(
+            select(SwissAIAttempt)
+            .where(SwissAIAttempt.request_id.in_(request_ids))
+            .order_by(SwissAIAttempt.attempt_index)
+        )
+        return list(result)
+
     async def add_log(
         self,
         account_id: str | None,
@@ -1031,6 +1042,8 @@ class RequestLogsRepository:
         upstream_error_code: str | None = None,
         model_source_id: str | None = None,
         model_source_kind: str | None = None,
+        route: str | None = None,
+        stream: bool | None = None,
         cost_usd: float | None = None,
         bridge_stage: str | None = None,
         request_kind: str = RequestKind.NORMAL.value,
@@ -1067,6 +1080,8 @@ class RequestLogsRepository:
                 account_id=account_id,
                 model_source_id=model_source_id,
                 model_source_kind=model_source_kind,
+                route=route,
+                stream=stream,
                 api_key_id=api_key_id,
                 session_id=session_id,
                 request_id=resolved_request_id,
@@ -1118,7 +1133,9 @@ class RequestLogsRepository:
                 requested_at=requested_at or utcnow(),
             )
             log.cost_usd = (
-                cost_usd
+                None
+                if model_source_kind == "swissai"
+                else cost_usd
                 if cost_usd is not None
                 else 0.0
                 if model_source_id is not None
@@ -1528,7 +1545,16 @@ class RequestLogsRepository:
             # filter-panel load. Emulate the skip scan instead — one indexed
             # probe per distinct value.
             return (
-                [value for value in await self._distinct_skip_scan(RequestLog.account_id, filters.conditions) if value],
+                sorted(
+                    {
+                        value
+                        for value in [
+                            *await self._distinct_skip_scan(RequestLog.account_id, filters.conditions),
+                            *await self._distinct_skip_scan(RequestLog.model_source_id, filters.conditions),
+                        ]
+                        if value
+                    }
+                ),
                 await self._pair_facet_skip_scan(RequestLog.model, RequestLog.reasoning_effort, filters.conditions),
                 [
                     value
@@ -1539,6 +1565,7 @@ class RequestLogsRepository:
             )
 
         account_stmt = select(RequestLog.account_id).distinct().order_by(RequestLog.account_id.asc())
+        source_stmt = select(RequestLog.model_source_id).distinct().order_by(RequestLog.model_source_id.asc())
         model_stmt = (
             select(RequestLog.model, RequestLog.reasoning_effort)
             .distinct()
@@ -1553,17 +1580,19 @@ class RequestLogsRepository:
         if filters.conditions:
             clause = and_(*filters.conditions)
             account_stmt = account_stmt.where(clause)
+            source_stmt = source_stmt.where(clause)
             model_stmt = model_stmt.where(clause)
             status_stmt = status_stmt.where(clause)
         if api_key_facet_filters.conditions:
             api_key_stmt = api_key_stmt.where(and_(*api_key_facet_filters.conditions))
 
         account_rows = await self._session.execute(account_stmt)
+        source_rows = await self._session.execute(source_stmt)
         model_rows = await self._session.execute(model_stmt)
         api_key_rows = await self._session.execute(api_key_stmt)
         status_rows = await self._session.execute(status_stmt)
 
-        account_ids = [row[0] for row in account_rows.all() if row[0]]
+        account_ids = sorted({row[0] for row in [*account_rows.all(), *source_rows.all()] if row[0]})
         model_options = [(row[0], row[1]) for row in model_rows.all() if row[0]]
         api_key_ids = [row[0] for row in api_key_rows.all() if row[0]]
         status_values = [(row[0], row[1]) for row in status_rows.all() if row[0]]
@@ -1673,7 +1702,7 @@ class RequestLogsRepository:
         if conversation_id is not None:
             conditions.append(RequestLog.conversation_id == conversation_id)
         if account_ids:
-            conditions.append(RequestLog.account_id.in_(account_ids))
+            conditions.append(or_(RequestLog.account_id.in_(account_ids), RequestLog.model_source_id.in_(account_ids)))
         if api_key_ids:
             conditions.append(RequestLog.api_key_id.in_(api_key_ids))
         if model_options:
@@ -1717,6 +1746,8 @@ class RequestLogsRepository:
             search_pattern = f"%{search}%"
             search_conditions = [
                 RequestLog.account_id.ilike(search_pattern),
+                RequestLog.model_source_id.ilike(search_pattern),
+                RequestLog.route.ilike(search_pattern),
                 RequestLog.request_id.ilike(search_pattern),
                 RequestLog.model.ilike(search_pattern),
                 RequestLog.reasoning_effort.ilike(search_pattern),

@@ -52,7 +52,7 @@ from app.core.clients.proxy_websocket import (
 from app.core.clock import REAL_CLOCK, REAL_SCHEDULER, Clock, RealScheduler
 from app.core.config.settings import Settings
 from app.core.crypto import TokenEncryptor
-from app.core.errors import SYNTHETIC_TRANSPORT_FAILURE_MARKER, OpenAIErrorParam, openai_error
+from app.core.errors import OpenAIErrorParam, openai_error
 from app.core.exceptions import ProxyReasoningEffortNotAllowed
 from app.core.openai.models import CompactResponsePayload, OpenAIResponsePayload
 from app.core.openai.parsing import parse_sse_event
@@ -7724,36 +7724,6 @@ class _SseSession:
         return self._response
 
 
-class _NativeSseResponse:
-    status = 200
-    headers: dict[str, str] = {}
-
-    def __init__(self, chunks: Sequence[bytes]) -> None:
-        self.content = _DummyContent(chunks)
-        self.closed = False
-
-    async def __aenter__(self) -> "_NativeSseResponse":
-        return self
-
-    async def __aexit__(self, *_args: object) -> None:
-        await self.aclose()
-
-    async def aclose(self) -> None:
-        self.closed = True
-
-
-class _NativeEgressClientHarness:
-    def __init__(self, result: object) -> None:
-        self.result = result
-        self.calls: list[object] = []
-
-    async def request(self, request: object) -> object:
-        self.calls.append(request)
-        if isinstance(self.result, BaseException):
-            raise self.result
-        return self.result
-
-
 class _SessionGenerationHarness:
     def __init__(self, failed_session: object, replacement_session: object) -> None:
         self.current_session = failed_session
@@ -9428,136 +9398,6 @@ async def test_stream_responses_falls_back_to_http_post_without_native_codex_hea
     assert upstream_headers["version"] == "0.142.0"
     assert "Version" not in upstream_headers
     assert events == ['data: {"type":"response.completed","response":{"id":"resp_1"}}\n\n']
-
-
-@pytest.mark.asyncio
-async def test_stream_responses_direct_http_prefers_native_egress(monkeypatch: pytest.MonkeyPatch) -> None:
-    class Settings:
-        upstream_base_url = "https://chatgpt.com/backend-api"
-        upstream_connect_timeout_seconds = 8.0
-        stream_idle_timeout_seconds = 45.0
-        trace_channels = frozenset()
-        proxy_request_budget_seconds = 15.0
-
-    monkeypatch.setattr(proxy_module, "get_settings", lambda: Settings())
-    monkeypatch.setattr(proxy_module, "_maybe_log_upstream_request_start", lambda **kwargs: None)
-    monkeypatch.setattr(proxy_module, "_maybe_log_upstream_request_complete", lambda **kwargs: None)
-    payload = ResponsesRequest.model_validate(
-        {"model": "gpt-5.1", "instructions": "hi", "input": [{"role": "user", "content": "hi"}]}
-    )
-    session = _SseSession(_SsePostResponse([]))
-    native_response = _NativeSseResponse([b'data: {"type":"response.completed","response":{"id":"resp_native"}}\n\n'])
-    native_client = _NativeEgressClientHarness(native_response)
-
-    events = [
-        event
-        async for event in proxy_module.stream_responses(
-            payload,
-            headers={"originator": "codex_exec"},
-            access_token="token",
-            account_id="acc_1",
-            session=cast(proxy_module.aiohttp.ClientSession, session),
-            native_egress_client=cast(Any, native_client),
-            upstream_stream_transport_override="http",
-        )
-    ]
-
-    assert events == ['data: {"type":"response.completed","response":{"id":"resp_native"}}\n\n']
-    assert session.calls == []
-    assert native_response.closed is True
-    assert len(native_client.calls) == 1
-    native_request = native_client.calls[0]
-    assert getattr(native_request, "method") == "POST"
-    assert getattr(native_request, "url") == "https://chatgpt.com/backend-api/codex/responses"
-    assert json.loads(getattr(native_request, "body")) == payload.to_payload()
-
-
-@pytest.mark.asyncio
-async def test_stream_responses_direct_http_falls_back_when_native_helper_is_unavailable(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    class Settings:
-        upstream_base_url = "https://chatgpt.com/backend-api"
-        upstream_connect_timeout_seconds = 8.0
-        stream_idle_timeout_seconds = 45.0
-        trace_channels = frozenset()
-        proxy_request_budget_seconds = 15.0
-
-    monkeypatch.setattr(proxy_module, "get_settings", lambda: Settings())
-    monkeypatch.setattr(proxy_module, "_maybe_log_upstream_request_start", lambda **kwargs: None)
-    monkeypatch.setattr(proxy_module, "_maybe_log_upstream_request_complete", lambda **kwargs: None)
-    payload = ResponsesRequest.model_validate(
-        {"model": "gpt-5.1", "instructions": "hi", "input": [{"role": "user", "content": "hi"}]}
-    )
-    session = _SseSession(
-        _SsePostResponse([b'data: {"type":"response.completed","response":{"id":"resp_python"}}\n\n'])
-    )
-    native_client = _NativeEgressClientHarness(proxy_module.NativeEgressUnavailable("helper disappeared"))
-
-    events = [
-        event
-        async for event in proxy_module.stream_responses(
-            payload,
-            headers={},
-            access_token="token",
-            account_id="acc_1",
-            session=cast(proxy_module.aiohttp.ClientSession, session),
-            native_egress_client=cast(Any, native_client),
-            upstream_stream_transport_override="http",
-        )
-    ]
-
-    assert events == ['data: {"type":"response.completed","response":{"id":"resp_python"}}\n\n']
-    assert len(native_client.calls) == 1
-    assert len(session.calls) == 1
-
-
-@pytest.mark.asyncio
-async def test_stream_responses_does_not_replay_ambiguous_native_failure_through_aiohttp(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    class Settings:
-        upstream_base_url = "https://chatgpt.com/backend-api"
-        upstream_connect_timeout_seconds = 8.0
-        stream_idle_timeout_seconds = 45.0
-        trace_channels = frozenset()
-        proxy_request_budget_seconds = 15.0
-
-    monkeypatch.setattr(proxy_module, "get_settings", lambda: Settings())
-    monkeypatch.setattr(proxy_module, "_maybe_log_upstream_request_start", lambda **kwargs: None)
-    monkeypatch.setattr(proxy_module, "_maybe_log_upstream_request_complete", lambda **kwargs: None)
-    payload = ResponsesRequest.model_validate(
-        {"model": "gpt-5.1", "instructions": "hi", "input": [{"role": "user", "content": "hi"}]}
-    )
-    session = _SseSession(_SsePostResponse([]))
-    native_client = _NativeEgressClientHarness(
-        proxy_module.NativeEgressTransportError(
-            "native upstream response body failed",
-            failure_phase="body_read",
-            retryable_same_contract=False,
-        )
-    )
-
-    events = [
-        event
-        async for event in proxy_module.stream_responses(
-            payload,
-            headers={},
-            access_token="token",
-            account_id="acc_1",
-            session=cast(proxy_module.aiohttp.ClientSession, session),
-            native_egress_client=cast(Any, native_client),
-            upstream_stream_transport_override="http",
-        )
-    ]
-
-    event = parse_sse_data_json(events[0])
-    assert event is not None
-    assert event[SYNTHETIC_TRANSPORT_FAILURE_MARKER] is True
-    response = cast(dict[str, object], event["response"])
-    error = cast(dict[str, object], response["error"])
-    assert error["code"] == "upstream_error"
-    assert session.calls == []
 
 
 @pytest.mark.asyncio
@@ -11795,7 +11635,6 @@ async def test_non_streaming_responses_forces_http_and_preserves_json_request(mo
             }
 
     monkeypatch.setattr(proxy_module, "get_settings", lambda: Settings())
-    monkeypatch.setattr(proxy_module, "discover_native_egress_client", lambda: None)
     monkeypatch.setattr(proxy_module, "_maybe_log_upstream_request_start", lambda **kwargs: None)
     monkeypatch.setattr(proxy_module, "_maybe_log_upstream_request_complete", lambda **kwargs: None)
 

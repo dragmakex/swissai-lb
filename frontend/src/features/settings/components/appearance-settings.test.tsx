@@ -4,7 +4,6 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { AppearanceSettings } from "@/features/settings/components/appearance-settings";
 import i18n from "@/i18n";
-import { useAccountQuotaDisplayStore } from "@/hooks/use-account-quota-display";
 import { useThemeStore } from "@/hooks/use-theme";
 import { useTimeFormatStore } from "@/hooks/use-time-format";
 import { useDateDisplayFormatStore } from "@/hooks/use-date-format";
@@ -35,7 +34,6 @@ describe("AppearanceSettings", () => {
     useThemeStore.setState({ preference: "light", theme: "light", initialized: true });
     useTimeFormatStore.setState({ timeFormat: "12h" });
     useDateDisplayFormatStore.setState({ dateDisplayFormat: "default" });
-    useAccountQuotaDisplayStore.setState({ quotaDisplay: "both" });
     useDashboardPreferencesStore.setState({ refreshSeconds: 15 });
   });
 
@@ -89,41 +87,14 @@ describe("AppearanceSettings", () => {
     expect(useDateDisplayFormatStore.getState().dateDisplayFormat).toBe("iso8601");
   });
 
-  it("exposes selected state for the account quota toggle", async () => {
-    const user = userEvent.setup();
-
-    render(<AppearanceSettings />);
-
-    const button5h = screen.getByRole("button", { name: "5H" });
-    const buttonWeekly = screen.getByRole("button", { name: "W" });
-    const buttonBoth = screen.getByRole("button", { name: "Both" });
-
-    expect(buttonBoth).toHaveAttribute("aria-pressed", "true");
-    expect(button5h).toHaveAttribute("aria-pressed", "false");
-    expect(buttonWeekly).toHaveAttribute("aria-pressed", "false");
-
-    await user.click(button5h);
-
-    expect(button5h).toHaveAttribute("aria-pressed", "true");
-    expect(useAccountQuotaDisplayStore.getState().quotaDisplay).toBe("5h");
-
-    await user.click(buttonWeekly);
-
-    expect(buttonWeekly).toHaveAttribute("aria-pressed", "true");
-    expect(useAccountQuotaDisplayStore.getState().quotaDisplay).toBe("weekly");
-  });
-
-  it("localizes the account burn projection row in zh-CN", async () => {
-    await i18n.changeLanguage("zh-CN");
+  it.each(["en", "zh-CN"])("omits subscription-only controls in %s", async language => {
+    await i18n.changeLanguage(language);
     try {
       render(<AppearanceSettings />);
-
-      expect(screen.getByText("账户消耗预测")).toBeInTheDocument();
-      expect(screen.getByText("在仪表盘上显示账户等效预测卡片。")).toBeInTheDocument();
-      expect(screen.queryByText("Account burn projection")).not.toBeInTheDocument();
-      expect(
-        screen.queryByText("Show the account-equivalent projection card on the dashboard."),
-      ).not.toBeInTheDocument();
+      expect(screen.queryByRole("switch")).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "5H" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "W" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Both" })).not.toBeInTheDocument();
     } finally {
       await i18n.changeLanguage("en");
     }

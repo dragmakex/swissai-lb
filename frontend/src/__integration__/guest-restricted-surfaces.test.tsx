@@ -8,7 +8,6 @@ import { useAuthStore } from "@/features/auth/hooks/use-auth";
 import {
   ADMIN_PERMISSIONS,
   GUEST_PERMISSIONS,
-  createAccountSummary,
   createDashboardAuthSession,
   createUpstreamProxyAdmin,
 } from "@/test/mocks/factories";
@@ -37,16 +36,11 @@ const guestSession = createDashboardAuthSession({
   guestPasswordRequired: false,
 });
 
-const maskedAccounts = [
-  createAccountSummary({
-    accountId: "acc_primary",
-    email: "p***@example.com",
-    displayName: "p***@example.com",
-    chatgptAccountId: null,
-    workspaceId: null,
-    workspaceLabel: null,
-  }),
-];
+const swissaiKeys = [{
+  id: "sak_primary", name: "Shared teaching key", keyPrefix: "sk-rc-…demo", status: "active", enabled: true,
+  cooldownUntil: null, failureReason: null, maxConcurrency: 4, inFlight: 0,
+  lastSuccessAt: null, lastFailureAt: null, createdAt: "2026-10-28T00:00:00Z",
+}];
 
 function spyRequestPaths(): string[] {
   const paths: string[] = [];
@@ -75,7 +69,7 @@ function restrictedRequests(paths: string[]): string[] {
 function useGuestSession() {
   server.use(
     http.get("/api/dashboard-auth/session", () => HttpResponse.json(guestSession)),
-    http.get("/api/accounts", () => HttpResponse.json({ accounts: maskedAccounts })),
+    http.get("/api/swissai-keys", () => HttpResponse.json(swissaiKeys)),
   );
   useAuthStore.setState({
     authenticated: true,
@@ -109,8 +103,7 @@ describe("guest restricted surfaces integration", () => {
     expect(await screen.findByRole("heading", { name: "APIs" })).toBeInTheDocument();
     expect(await screen.findByText("API keys are managed by administrators")).toBeInTheDocument();
     expect(screen.getByText("Sign in as an administrator to view and manage API keys.")).toBeInTheDocument();
-    // Header badge query proves the page settled its network work.
-    await waitFor(() => expect(paths).toContain("/api/accounts"));
+    await waitFor(() => expect(paths).toContain("/api/swissai/settings"));
 
     expect(screen.queryByRole("button", { name: "Create API Key" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Retry" })).not.toBeInTheDocument();
@@ -130,9 +123,8 @@ describe("guest restricted surfaces integration", () => {
         "You are viewing the dashboard with read-only guest access. Admin controls are disabled.",
       ),
     ).toBeInTheDocument();
-    // Advanced is expanded via the deep link; allowed self-fetching sections still load.
     await waitFor(() => expect(paths).toContain("/api/firewall/ips"));
-    await waitFor(() => expect(paths).toContain("/api/model-sources/"));
+    await waitFor(() => expect(paths).toContain("/api/swissai/settings"));
 
     expect(screen.queryByRole("button", { name: "Create key" })).not.toBeInTheDocument();
     expect(screen.queryByText("API Keys")).not.toBeInTheDocument();
@@ -141,20 +133,19 @@ describe("guest restricted surfaces integration", () => {
     expect(restrictedRequests(paths)).toEqual([]);
   });
 
-  it("renders masked accounts, hides OAuth help, and skips the upstream-proxy query on /accounts", async () => {
+  it("renders redacted SwissAI keys without mutation or subscription controls for guests", async () => {
     useGuestSession();
     const paths = spyRequestPaths();
     window.history.pushState({}, "", "/accounts");
 
     renderWithProviders(<App />);
 
-    expect(await screen.findByRole("heading", { name: "Accounts" })).toBeInTheDocument();
-    expect(await screen.findByRole("heading", { name: "p***@example.com" })).toBeInTheDocument();
-    await waitFor(() => expect(paths).toContain("/api/accounts/acc_primary/usage-reset-credits"));
-
-    expect(screen.getAllByText(/Personal \/ unknown workspace/).length).toBeGreaterThan(0);
+    expect(await screen.findByRole("heading", { name: "SwissAI Keys" })).toBeInTheDocument();
+    expect(await screen.findByText("Shared teaching key")).toBeInTheDocument();
+    expect(screen.getByText("sk-rc-…demo")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Need help?" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Add account" })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "Add key" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Probe|Pause|Edit|Delete/ })).not.toBeInTheDocument();
     expect(restrictedRequests(paths)).toEqual([]);
   });
 
@@ -171,7 +162,7 @@ describe("guest restricted surfaces integration", () => {
       expect(logUrls.some((url) => url.pathname === "/api/request-logs")).toBe(true);
       expect(logUrls.some((url) => url.pathname === "/api/request-logs/options")).toBe(true);
     });
-    expect(await screen.findByRole("button", { name: "Accounts" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "SwissAI keys" })).toBeInTheDocument();
 
     // No log or facet request carries the hidden filter; other filters survive.
     for (const url of requestLogUrls(urls)) {
@@ -205,7 +196,7 @@ describe("guest restricted surfaces integration", () => {
     expect(new URL(window.location.href).searchParams.getAll("apiKeyId")).toEqual(["key_1"]);
   });
 
-  it("keeps requesting the restricted reads for writers (regression)", async () => {
+  it("fetches client-key and SwissAI settings, but not removed provider surfaces, for writers", async () => {
     const paths = spyRequestPaths();
     window.history.pushState({}, "", "/settings?advanced=1");
 
@@ -213,8 +204,9 @@ describe("guest restricted surfaces integration", () => {
 
     expect(await screen.findByRole("heading", { name: "Settings" })).toBeInTheDocument();
     await waitFor(() => expect(paths).toContain("/api/api-keys/"));
-    await waitFor(() => expect(paths).toContain("/api/settings/upstream-proxy"));
-    await waitFor(() => expect(paths).toContain("/api/sticky-sessions"));
+    await waitFor(() => expect(paths).toContain("/api/swissai/settings"));
+    expect(paths).not.toContain("/api/settings/upstream-proxy");
+    expect(paths).not.toContain("/api/sticky-sessions");
     expect(await screen.findByRole("button", { name: "Create key" })).toBeInTheDocument();
   });
 
@@ -229,25 +221,19 @@ describe("guest restricted surfaces integration", () => {
     expect(screen.queryByText("API keys are managed by administrators")).not.toBeInTheDocument();
   });
 
-  it("keeps the upstream-proxy query and OAuth help (connect address) for writers on /accounts (regression)", async () => {
+  it("offers SwissAI key creation without fetching OAuth or proxy topology for writers", async () => {
     const user = userEvent.setup();
-    server.use(
-      http.get("/api/settings/runtime/connect-address", () =>
-        HttpResponse.json({ connectAddress: "lb.example:2455" }),
-      ),
-    );
     const paths = spyRequestPaths();
     window.history.pushState({}, "", "/accounts");
 
     renderWithProviders(<App />);
 
-    expect(await screen.findByRole("heading", { name: "Accounts" })).toBeInTheDocument();
-    await waitFor(() => expect(paths).toContain("/api/settings/upstream-proxy"));
-
-    await user.click(await screen.findByRole("button", { name: "Need help?" }));
-
-    await waitFor(() => expect(paths).toContain("/api/settings/runtime/connect-address"));
-    expect(await screen.findByText("Windows OAuth Help")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "SwissAI Keys" })).toBeInTheDocument();
+    await user.click(await screen.findByRole("button", { name: "Add key" }));
+    expect(await screen.findByRole("dialog", { name: "Add SwissAI key" })).toBeInTheDocument();
+    expect(paths).not.toContain("/api/settings/upstream-proxy");
+    expect(paths).not.toContain("/api/settings/runtime/connect-address");
+    expect(screen.queryByText("Windows OAuth Help")).not.toBeInTheDocument();
   });
 
   it("does not render upstream-proxy data cached by an earlier admin session for guests", async () => {
@@ -263,7 +249,6 @@ describe("guest restricted surfaces integration", () => {
 
     expect(await screen.findByRole("heading", { name: "Settings" })).toBeInTheDocument();
     await waitFor(() => expect(paths).toContain("/api/firewall/ips"));
-    expect(settingsRender.queryClient.getQueryData(["settings", "upstream-proxy"])).toEqual(cached);
     expect(screen.queryByText("Upstream proxy routing")).not.toBeInTheDocument();
     expect(screen.queryByText("Primary proxy")).not.toBeInTheDocument();
     expect(screen.queryByText("Primary pool")).not.toBeInTheDocument();
@@ -273,9 +258,8 @@ describe("guest restricted surfaces integration", () => {
     const accountsRender = renderWithProviders(<App />);
     accountsRender.queryClient.setQueryData(["settings", "upstream-proxy"], cached);
 
-    expect(await screen.findByRole("heading", { name: "p***@example.com" })).toBeInTheDocument();
-    await waitFor(() => expect(paths).toContain("/api/accounts/acc_primary/usage-reset-credits"));
-    expect(accountsRender.queryClient.getQueryData(["settings", "upstream-proxy"])).toEqual(cached);
+    expect(await screen.findByText("Shared teaching key")).toBeInTheDocument();
+    await waitFor(() => expect(paths).toContain("/api/swissai-keys"));
     expect(screen.queryByText("Proxy binding")).not.toBeInTheDocument();
     expect(screen.queryByRole("combobox", { name: "Account proxy pool" })).not.toBeInTheDocument();
     expect(screen.queryByText("Primary pool")).not.toBeInTheDocument();

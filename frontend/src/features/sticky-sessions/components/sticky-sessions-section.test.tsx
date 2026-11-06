@@ -106,7 +106,7 @@ describe("StickySessionsSection", () => {
     expect(setKeyQuery).toHaveBeenLastCalledWith("session-1");
 
     expect(screen.getByRole("button", { name: "Key" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Account" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "SwissAI key" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Updated ↓" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Key" }));
     expect(setSort).toHaveBeenLastCalledWith("key", "asc");

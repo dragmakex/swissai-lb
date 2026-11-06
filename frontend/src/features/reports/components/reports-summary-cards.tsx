@@ -1,7 +1,6 @@
 import { useTranslation } from "react-i18next";
 
 import { cn } from "@/lib/utils";
-import { formatCurrency } from "@/utils/formatters";
 
 import type { ReportComparison, ReportSummary } from "../schemas";
 
@@ -21,9 +20,9 @@ export function ReportsSummaryCards({ summary, comparison }: ReportsSummaryCards
     {
       id: "total-cost",
       label: t("reports.summary.totalCost"),
-      value: formatCurrency(summary.totalCostUsd),
-      sub: t("reports.summary.avgCostPerDay", { cost: formatCurrency(summary.avgCostPerDay) }),
-      comparison: buildComparison(summary.totalCostUsd, comparison.previous.totalCostUsd, comparison.canCompare),
+      value: "—",
+      sub: "SwissAI pricing is unknown",
+      comparison: undefined,
     },
     {
       id: "tokens",

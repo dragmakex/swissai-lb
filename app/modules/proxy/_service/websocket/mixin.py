@@ -777,35 +777,21 @@ def _parse_upstream_websocket_text_frame(
     The payload is json-decoded a single time, the event type is classified
     from the parsed dict, and pydantic validation runs only for lifecycle
     frames (the only events whose validated model fields the proxy consumes).
-    Native Responses frames supply the already-decoded payload alongside their
-    trusted classification, so this path reuses that object and avoids a
-    second JSON decode. Public error conversion still runs in this policy layer.
+    Public error conversion still runs in this policy layer.
     """
-    native_payload = getattr(message, "payload", None)
-    native_event_type = getattr(message, "event_type", None)
-    if (
-        getattr(message, "responses_interpreted", False)
-        and isinstance(native_payload, dict)
-        and (native_event_type is None or isinstance(native_event_type, str))
-    ):
-        payload = native_payload
-        event_type = native_event_type
-        routing = getattr(message, "routing", None)
-    else:
-        try:
-            raw_payload = json.loads(text)
-        except json.JSONDecodeError:
-            raw_payload = None
-        payload = cast(dict[str, JsonValue], raw_payload) if isinstance(raw_payload, dict) else None
-        event_type = classify_event_type(payload)
-        routing = None
+    try:
+        raw_payload = json.loads(text)
+    except json.JSONDecodeError:
+        raw_payload = None
+    payload = cast(dict[str, JsonValue], raw_payload) if isinstance(raw_payload, dict) else None
+    event_type = classify_event_type(payload)
     event = parse_sse_event_payload(payload) if event_type in _LIFECYCLE_EVENT_TYPES else None
-    sequence = routing.sequence_number if routing is not None else payload.get("sequence_number") if payload else None
+    sequence = payload.get("sequence_number") if payload else None
     return _ParsedUpstreamWebSocketFrame(
         payload=payload,
         event_type=event_type,
         event=event,
-        response_id=_websocket_response_id(event, payload, routing=routing),
+        response_id=_websocket_response_id(event, payload),
         sequence_number=sequence if isinstance(sequence, int) and not isinstance(sequence, bool) else None,
     )
 

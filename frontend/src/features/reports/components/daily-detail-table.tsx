@@ -2,12 +2,12 @@ import { useState } from "react";
 import { ArrowDown, ArrowUp, ArrowUpDown, Download } from "lucide-react";
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
+import { downloadCsv } from "@/utils/csv";
 import { Button } from "@/components/ui/button";
 import { useDateDisplayFormatStore } from "@/hooks/use-date-format";
 import { buildContinuousDailyRows } from "../daily-series";
 import type { DailyReportRow } from "../schemas";
 import { formatReportBucketDate } from "../date";
-import { formatCurrency } from "@/utils/formatters";
 
 export type DailyDetailTableProps = {
   startDate: string;
@@ -157,7 +157,7 @@ export function DailyDetailTable({ startDate, endDate, data }: DailyDetailTableP
                   {row.reasoningTokens == null ? "—" : formatTokens(row.reasoningTokens)}
                 </td>
                 <td className="py-2.5 pr-4 text-right font-medium text-emerald-600 dark:text-emerald-400">
-                  {formatCurrency(row.costUsd)}
+                  {"—"}
                 </td>
                 <td className="py-2.5 pr-4 text-right text-muted-foreground">
                   {row.activeAccounts}
@@ -277,15 +277,9 @@ function exportCSV(rows: DailyReportRow[], t: TFunction) {
     t("reports.dailyBreakdown.csvColumns.cancelled"),
     t("reports.dailyBreakdown.csvColumns.errors"),
   ];
-  const lines = rows.map((r) =>
-    [r.date, r.requests, r.conversations, r.inputTokens, r.outputTokens, r.reasoningTokens ?? "", r.cachedInputTokens, r.costUsd.toFixed(4), r.activeAccounts, r.cancelledCount, r.errorCount].join(","),
-  );
-  const csv = [headers.join(","), ...lines].join("\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `reports-${rows[0]?.date ?? "data"}-${rows[rows.length - 1]?.date ?? "data"}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
+  downloadCsv(`reports-${rows[0]?.date ?? "data"}-${rows[rows.length - 1]?.date ?? "data"}.csv`, [
+    headers,
+    ...rows.map(r => [r.date, r.requests, r.conversations, r.inputTokens, r.outputTokens, r.reasoningTokens,
+      r.cachedInputTokens, null, r.activeAccounts, r.cancelledCount, r.errorCount]),
+  ]);
 }

@@ -34,7 +34,7 @@ from app.core.auth.step_up import (
     account_step_up_methods,
     is_step_up_fresh,
 )
-from app.core.clients.proxy import CODEX_LB_REQUIRED_CAPABILITY_HEADER
+from app.core.clients.proxy import SWISSAI_LB_REQUIRED_CAPABILITY_HEADER
 from app.core.clients.usage import UsageFetchError, fetch_usage
 from app.core.config.settings import get_settings
 from app.core.config.settings_cache import get_settings_cache
@@ -117,7 +117,7 @@ async def validate_proxy_api_key(
     """A required-capability header authenticates even when global proxy API-key auth is disabled."""
 
     authorization = None if credentials is None else f"Bearer {credentials.credentials}"
-    if request.headers.getlist(CODEX_LB_REQUIRED_CAPABILITY_HEADER):
+    if request.headers.getlist(SWISSAI_LB_REQUIRED_CAPABILITY_HEADER):
         return await validate_required_proxy_api_key_authorization(authorization)
     return await validate_proxy_api_key_authorization(authorization, request=request)
 
@@ -130,7 +130,9 @@ async def validate_proxy_api_key_authorization(
     settings = await get_settings_cache().get()
     if not settings.api_key_auth_enabled:
         if request is not None and not is_local_request(request):
-            if not _is_proxy_unauthenticated_socket_peer_allowed(request):
+            if not _is_anonymous_lan_peer_allowed(request) and not _is_proxy_unauthenticated_socket_peer_allowed(
+                request
+            ):
                 raise ProxyAuthError("Proxy authentication must be configured before remote access is allowed")
         return None
 
@@ -595,6 +597,16 @@ def get_dashboard_request_auth_mode() -> DashboardAuthMode:
     return get_settings().dashboard_auth_mode
 
 
+def _is_anonymous_lan_peer_allowed(request: HTTPConnection) -> bool:
+    if not get_settings().proxy_allow_anonymous_lan:
+        return False
+    try:
+        peer = ip_address(raw_socket_peer_host(request) or "")
+    except ValueError:
+        return False
+    return peer.is_private and not peer.is_unspecified and not peer.is_multicast
+
+
 def _is_proxy_unauthenticated_socket_peer_allowed(request: HTTPConnection) -> bool:
     socket_host = raw_socket_peer_host(request)
     if socket_host is None:
@@ -692,7 +704,7 @@ async def validate_codex_usage_identity(request: Request) -> ApiKeyData | None:
 async def validate_codex_provider_usage_identity(request: Request) -> ApiKeyData | None:
     """Bind provider capability intent to a proxy API-key principal before usage I/O."""
 
-    if request.headers.getlist(CODEX_LB_REQUIRED_CAPABILITY_HEADER):
+    if request.headers.getlist(SWISSAI_LB_REQUIRED_CAPABILITY_HEADER):
         return await validate_required_proxy_api_key_authorization(request.headers.get("authorization"))
     return await validate_codex_usage_identity(request)
 

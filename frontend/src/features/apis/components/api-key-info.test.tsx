@@ -105,7 +105,8 @@ describe("ApiKeyInfo", () => {
 		expect(screen.getByText(/50K tok/)).toBeInTheDocument();
 		expect(screen.getByText(/10K cached/)).toBeInTheDocument();
 		expect(screen.getByText(/150 req/)).toBeInTheDocument();
-		expect(screen.getByText(/\$1.23/)).toBeInTheDocument();
+		expect(screen.queryByText(/\$1.23/)).not.toBeInTheDocument();
+        expect(screen.getByText("—")).toBeInTheDocument();
 	});
 
 	it("shows an empty limits state when no limits are configured", () => {

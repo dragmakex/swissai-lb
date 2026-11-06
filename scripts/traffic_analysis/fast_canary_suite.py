@@ -47,14 +47,6 @@ class FastCanaryConfig:
     codex_version: str
 
     @property
-    def native_manifest(self) -> Path:
-        return self.repo / "Cargo.toml"
-
-    @property
-    def native_bin_dir(self) -> Path:
-        return self.repo / "target" / "release"
-
-    @property
     def failure_baseline(self) -> Path:
         return self.repo / "scripts" / "traffic_analysis" / "baselines" / DEFAULT_BASELINE.name
 
@@ -82,7 +74,6 @@ def validate_config(config: FastCanaryConfig) -> FastCanaryConfig:
         ("raw runner", config.raw_runner),
         ("failure runner", config.failure_runner),
         ("isolated auth.json", config.auth_json),
-        ("native helper manifest", config.native_manifest),
         ("failure baseline", config.failure_baseline),
     ):
         if not source.is_file():
@@ -125,7 +116,7 @@ def stamp_isolated_auth_refresh(auth_json: Path) -> str:
 
     Stamping the file keeps the whole run inside the window (a run lasts
     minutes, the window is days) without widening the window for the process,
-    which is what the removed ``CODEX_LB_TOKEN_REFRESH_INTERVAL_DAYS=365``
+    which is what the removed ``SWISSAI_LB_TOKEN_REFRESH_INTERVAL_DAYS=365``
     injection used to do for the failure matrix only. The recorded refresh time
     is the only value that changes (the file is rewritten as formatted JSON);
     tokens are neither inspected nor logged.
@@ -229,28 +220,11 @@ def run_suite(
     output_dir.mkdir(parents=True, exist_ok=True)
     stamp_isolated_auth_refresh(config.auth_json)
     try:
-        command_runner(
-            (
-                "cargo",
-                "build",
-                "--locked",
-                "--release",
-                "--package",
-                "codex-lb-egress-worker",
-                "--bin",
-                "codex-lb-native-egress",
-                "--manifest-path",
-                str(config.native_manifest),
-            ),
-            config.repo,
-            None,
-        )
         command_runner((str(config.raw_runner), str(config.run_dir / "raw-h2")), config.repo, None)
         if not _raw_results_pass(config.run_dir):
             raise FastCanaryError("raw HTTP/2 canary did not satisfy every required result")
 
         failure_environment = os.environ.copy()
-        failure_environment["PATH"] = f"{config.native_bin_dir}{os.pathsep}{failure_environment.get('PATH', '')}"
         command_runner(
             (str(config.failure_runner), str(config.run_dir / "failure-matrix")),
             config.repo,

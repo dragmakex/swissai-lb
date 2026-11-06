@@ -100,16 +100,16 @@ describe("ApisPage", () => {
 		renderApisPage({ createMutation });
 
 		await user.click(screen.getByRole("button", { name: "Create API Key" }));
-		const dialog = await screen.findByRole("dialog", { name: "Create API key" });
+		const dialog = await screen.findByRole("dialog", { name: "Create client key" });
 		const nameInput = within(dialog).getByLabelText("Name");
 
 		await user.type(nameInput, "Broken key");
-		await user.click(within(dialog).getByRole("button", { name: "Create" }));
+		await user.click(within(dialog).getByRole("button", { name: "Save client key" }));
 
 		await waitFor(() => {
 			expect(createMutation.mutateAsync).toHaveBeenCalledTimes(1);
 		});
-		expect(screen.getByRole("dialog", { name: "Create API key" })).toBeInTheDocument();
+		expect(screen.getByRole("dialog", { name: "Create client key" })).toBeInTheDocument();
 		expect(screen.getByLabelText("Name")).toHaveValue("Broken key");
 	});
 
@@ -123,16 +123,16 @@ describe("ApisPage", () => {
 		await user.click(screen.getByRole("button", { name: "Actions" }));
 		await user.click(screen.getByRole("menuitem", { name: "Edit" }));
 
-		const dialog = await screen.findByRole("dialog", { name: "Edit API key" });
+		const dialog = await screen.findByRole("dialog", { name: "Edit client key" });
 		const nameInput = within(dialog).getByLabelText("Name");
 		await user.clear(nameInput);
 		await user.type(nameInput, "Renamed key");
-		await user.click(within(dialog).getByRole("button", { name: "Save" }));
+		await user.click(within(dialog).getByRole("button", { name: "Save client key" }));
 
 		await waitFor(() => {
 			expect(updateMutation.mutateAsync).toHaveBeenCalledTimes(1);
 		});
-		expect(screen.getByRole("dialog", { name: "Edit API key" })).toBeInTheDocument();
+		expect(screen.getByRole("dialog", { name: "Edit client key" })).toBeInTheDocument();
 		expect(screen.getByLabelText("Name")).toHaveValue("Renamed key");
 	});
 
@@ -238,10 +238,11 @@ describe("ApisPage", () => {
 		});
 
 		expect(screen.getByText("Overview")).toBeInTheDocument();
-		expect(screen.getByText("Lifetime Cost by API Key")).toBeInTheDocument();
+		expect(screen.getByText("Requests by client key")).toBeInTheDocument();
+        expect(screen.queryByText("Lifetime Cost by API Key")).not.toBeInTheDocument();
 		expect(screen.getByText("Lifetime Tokens by API Key")).toBeInTheDocument();
 		expect(
-			within(screen.getByTestId("api-keys-overview-cost-panel")).getByText("Secondary key"),
+			within(screen.getByTestId("api-keys-overview-requests-panel")).getByText("Secondary key"),
 		).toBeInTheDocument();
 	});
 });

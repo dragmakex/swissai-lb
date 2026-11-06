@@ -27,16 +27,16 @@ describe("useRequestLogTablePreferences", () => {
     const { result, unmount } = renderHook(() => useRequestLogTablePreferences());
 
     act(() => {
-      result.current.toggleColumn("plan");
+      result.current.toggleColumn("route");
       result.current.setColumnWidth("account", 284);
     });
 
-    expect(result.current.visibleColumns).not.toContain("plan");
+    expect(result.current.visibleColumns).not.toContain("route");
     expect(result.current.columnWidths.account).toBe(284);
 
     unmount();
     const restored = renderHook(() => useRequestLogTablePreferences());
-    expect(restored.result.current.visibleColumns).not.toContain("plan");
+    expect(restored.result.current.visibleColumns).not.toContain("route");
     expect(restored.result.current.columnWidths.account).toBe(284);
   });
 
@@ -106,7 +106,7 @@ describe("useRequestLogTablePreferences", () => {
   it("restores all columns, clears widths, and removes stored customization", () => {
     const { result } = renderHook(() => useRequestLogTablePreferences());
     act(() => {
-      result.current.toggleColumn("plan");
+      result.current.toggleColumn("route");
       result.current.setColumnWidth("account", 240);
     });
     act(() => {

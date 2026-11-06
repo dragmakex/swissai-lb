@@ -74,7 +74,7 @@ DASHBOARD_SESSION_COOKIE = "codex_lb_dashboard_session"
 #: user id; it is rejected outright so a stale cookie can never resolve to a
 #: user it was not issued for.
 SESSION_PAYLOAD_VERSION = 2
-_TOTP_ISSUER = "codex-lb"
+_TOTP_ISSUER = "swissai-lb"
 AUTH_METHOD_PASSWORD = "password"
 
 

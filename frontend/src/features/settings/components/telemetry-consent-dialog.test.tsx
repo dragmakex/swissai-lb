@@ -11,7 +11,7 @@ import { server } from "@/test/mocks/server";
 import { renderWithProviders } from "@/test/utils";
 
 function undecidedConsent() {
-  return createTelemetryConsent({ state: "undecided", source: "default", active: true });
+  return createTelemetryConsent({ state: "undecided", source: "default", active: false });
 }
 
 describe("TelemetryConsentDialog", () => {
@@ -37,8 +37,8 @@ describe("TelemetryConsentDialog", () => {
     expect(
       within(dialog).getByText(i18n.t("settings.telemetry.optOutNotice")),
     ).toBeInTheDocument();
-    expect(within(dialog).getByRole("button", { name: "Keep enabled" })).toBeInTheDocument();
-    expect(within(dialog).getByRole("button", { name: "Disable telemetry" })).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Enable telemetry" })).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Keep disabled" })).toBeInTheDocument();
     expect(
       within(dialog).getByRole("link", { name: "Learn what is collected and why" }),
     ).toBeInTheDocument();
@@ -59,7 +59,7 @@ describe("TelemetryConsentDialog", () => {
 
     renderWithProviders(<TelemetryConsentDialog />);
 
-    await user.click(await screen.findByRole("button", { name: "Keep enabled" }));
+    await user.click(await screen.findByRole("button", { name: "Enable telemetry" }));
 
     await waitFor(() => expect(putBody).toEqual({ enabled: true }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
@@ -80,7 +80,7 @@ describe("TelemetryConsentDialog", () => {
 
     renderWithProviders(<TelemetryConsentDialog />);
 
-    await user.click(await screen.findByRole("button", { name: "Disable telemetry" }));
+    await user.click(await screen.findByRole("button", { name: "Keep disabled" }));
 
     await waitFor(() => expect(putBody).toEqual({ enabled: false }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
@@ -134,7 +134,7 @@ describe("TelemetryConsentDialog", () => {
     server.use(
       http.get("/api/settings/telemetry", () =>
         HttpResponse.json(
-          createTelemetryConsent({ state: "undecided", source: "default", active: true, preview: null }),
+          createTelemetryConsent({ state: "undecided", source: "default", active: false, preview: null }),
         ),
       ),
     );

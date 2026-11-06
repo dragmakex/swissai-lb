@@ -46,12 +46,12 @@ APP_DIR = ROOT / "app"
 SETTINGS_MODULE = Path("app/core/config/settings.py")
 ENV_EXAMPLE_PATH = ROOT / ".env.example"
 BUDGETS_PATH = ROOT / ".github" / "simplicity-budgets.toml"
-ENV_PREFIX = "CODEX_LB_"
+ENV_PREFIX = "SWISSAI_LB_"
 ENV_ONLY_TIERS = frozenset({"T0", "T1"})
 DASHBOARD_SETTINGS_TABLE = "dashboard_settings"
 
 # Process-level environment reads that are NOT Settings fields (third-party or POSIX
-# conventions; documented in docs/reference/settings.md "Process-level environment
+# conventions; documented in the generated OpenSpec settings reference's process-level environment
 # variables"). Paths are repo-relative; the value is the number of lines in that file that
 # reference the environment today (the per-file ratchet: more lines fail, fewer lines warn so
 # the cap gets lowered, an entry whose file no longer reads the environment warns so it gets
@@ -62,11 +62,11 @@ ENV_READ_ALLOWLIST: Mapping[str, tuple[int, str]] = {
     "app/core/metrics/prometheus.py": (1, "PROMETHEUS_MULTIPROC_DIR"),
     "app/core/utils/proxy_env.py": (4, "HTTP(S)_PROXY/ALL_PROXY/WS_PROXY/NO_PROXY outbound proxy"),
     "app/core/clients/http.py": (3, "outbound proxy env fallback"),
-    "app/core/clients/proxy_websocket.py": (2, "outbound proxy env fallback"),
+    "app/core/clients/proxy_websocket.py": (1, "outbound proxy env fallback"),
     "app/modules/runtime/service.py": (1, "GITHUB_TOKEN release-version lookup"),
     "app/modules/telemetry/snapshot.py": (1, "KUBERNETES_SERVICE_HOST deployment detection"),
     "app/modules/automations/service.py": (1, "TZ default schedule timezone (S13)"),
-    "app/db/session.py": (2, "CODEX_LB_TEST_DATABASE_URL (CI only)"),
+    "app/db/session.py": (2, "SWISSAI_LB_TEST_DATABASE_URL (CI only)"),
     "app/db/alembic/versions/20260312_000000_add_additional_usage_quota_key.py": (1, "migration-time registry path"),
     "app/codex_sessions_retag.py": (3, "CODEX_HOME/USERPROFILE/WSL_DISTRO_NAME (standalone CLI tool)"),
 }

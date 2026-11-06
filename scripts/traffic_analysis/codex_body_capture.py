@@ -125,7 +125,7 @@ WEBSOCKET_TURN_FRAME_TYPE = "response.create"
 # Variables whose presence means a production or proxy configuration has bled
 # into the shell. Mirrors ``traffic-parity-auth/env.sh``: a capture that picks
 # up ``OPENAI_BASE_URL`` is no longer loopback-only, and one that picks up a
-# ``CODEX_LB_*`` value is reading the operator's deployment.
+# ``SWISSAI_LB_*`` value is reading the operator's deployment.
 FORBIDDEN_ENVIRONMENT_VARIABLES: frozenset[str] = frozenset(
     {
         "CHATGPT_BASE_URL",
@@ -136,7 +136,7 @@ FORBIDDEN_ENVIRONMENT_VARIABLES: frozenset[str] = frozenset(
         "OPENAI_BASE_URL",
     }
 )
-FORBIDDEN_ENVIRONMENT_PREFIXES: tuple[str, ...] = ("CODEX_LB_",)
+FORBIDDEN_ENVIRONMENT_PREFIXES: tuple[str, ...] = ("SWISSAI_LB_",)
 
 # The outbound proxy family, matched case-insensitively because both spellings
 # are honoured. These are not merely untidy: the Codex client routes even a
@@ -202,7 +202,7 @@ def assert_output_outside_repo(
             f"Use one of {', '.join(SUGGESTED_OUTPUT_ROOTS)}."
         )
     for root in forbidden_roots:
-        root_path = Path(root)
+        root_path = Path(root).expanduser().resolve()
         if resolved == root_path or root_path in resolved.parents:
             raise CaptureRefusal(
                 f"output directory must not live under {root} (storage policy): {resolved}. "

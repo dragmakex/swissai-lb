@@ -6,13 +6,12 @@ export const REPORT_CHART_DEFINITIONS = [
   { id: "timeToFirstToken", labelKey: "reports.charts.timeToFirstToken" },
   { id: "tokensPerSecond", labelKey: "reports.charts.tokensPerSecond" },
   { id: "queueWait", labelKey: "reports.charts.queueWait" },
-  { id: "threadIdentity", labelKey: "reports.threadIdentity.title" },
 ] as const;
 
 export type ReportChartId = (typeof REPORT_CHART_DEFINITIONS)[number]["id"];
 
 export const REPORT_CHART_VISIBILITY_STORAGE_KEY =
-  "codex-lb-reports-visible-charts";
+  "swissai-lb-reports-visible-charts";
 
 const REPORT_CHART_IDS = REPORT_CHART_DEFINITIONS.map(({ id }) => id);
 

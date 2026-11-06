@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+import tempfile
 from pathlib import Path
 
 from cryptography.fernet import Fernet
@@ -12,9 +14,20 @@ def _get_or_create_key(key_file: Path) -> bytes:
     if key_file.exists():
         return key_file.read_bytes()
     key = Fernet.generate_key()
-    key_file.write_bytes(key)
-    key_file.chmod(0o600)
-    return key
+    # Publish complete key material without ever overwriting a peer's key.
+    fd, temporary = tempfile.mkstemp(prefix=".encryption-", dir=key_file.parent)
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(key)
+            handle.flush()
+            os.fsync(handle.fileno())
+        try:
+            os.link(temporary, key_file)
+        except FileExistsError:
+            return key_file.read_bytes()
+        return key
+    finally:
+        Path(temporary).unlink(missing_ok=True)
 
 
 class TokenEncryptor:

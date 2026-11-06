@@ -15,9 +15,8 @@ from app.core.balancer.types import UpstreamError
 from app.core.clients.files import create_file as core_create_file  # noqa: F401
 from app.core.clients.files import finalize_file as core_finalize_file  # noqa: F401
 from app.core.clients.http import lease_http_session as lease_http_session  # noqa: F401
-from app.core.clients.native_egress import NativeWebSocketRoutingMetadata
 from app.core.clients.proxy import (  # noqa: F401  # noqa: F401
-    CODEX_LB_REQUIRED_CAPABILITY_HEADER,
+    SWISSAI_LB_REQUIRED_CAPABILITY_HEADER,
     ImageFetchSession,
     ProxyResponseError,
     UpstreamProxyRouteTrace,
@@ -860,13 +859,9 @@ def _record_websocket_responses_lite_acceptance(
 def _websocket_response_id(
     event: OpenAIEvent | None,
     payload: dict[str, JsonValue] | None,
-    *,
-    routing: NativeWebSocketRoutingMetadata | None = None,
 ) -> str | None:
     if event is not None and event.response is not None and event.response.id:
         return event.response.id
-    if routing is not None:
-        return routing.payload_response_id
     if not isinstance(payload, dict):
         return None
     direct_response_id = payload.get("response_id")
@@ -2230,7 +2225,7 @@ def _parse_websocket_payload(text: str) -> dict[str, JsonValue] | None:
 
 
 def _websocket_capability_metadata_values(payload: dict[str, JsonValue]) -> tuple[JsonValue, ...] | None:
-    normalized_name = CODEX_LB_REQUIRED_CAPABILITY_HEADER.lower()
+    normalized_name = SWISSAI_LB_REQUIRED_CAPABILITY_HEADER.lower()
     payload_pairs = payload.raw_pairs if isinstance(payload, _WebSocketJsonObject) else tuple(payload.items())
     misplaced_values = [value for key, value in payload_pairs if key.lower() == normalized_name]
     if misplaced_values:

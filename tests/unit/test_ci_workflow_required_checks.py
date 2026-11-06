@@ -95,25 +95,13 @@ def test_openspec_validation_is_required_for_spec_only_changes() -> None:
     assert "- openspec" in required_job
 
 
-def test_rust_job_runs_native_routed_wire_probe_with_built_helper() -> None:
+def test_ci_does_not_build_or_require_the_retired_worker() -> None:
     workflow = _ci_workflow_text()
-    rust_job = _job_block(workflow, "rust")
     required_job = _job_block(workflow, "ci-required")
-
-    build = "cargo build --locked -p codex-lb-egress-worker --bin codex-lb-native-egress"
-    probe = "uv run pytest -q -ra tests/integration/test_native_routed_egress.py"
-    assert build in rust_job
-    assert probe in rust_job
-    assert rust_job.index(build) < rust_job.index(probe)
-    assert "uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884" in rust_job
-    assert "uv sync --dev --frozen" in rust_job
-    assert (
-        "CODEX_LB_NATIVE_EGRESS_TEST_BINARY: ${{ github.workspace }}/target/debug/codex-lb-native-egress"
-    ) in rust_job
-    assert "- rust" in required_job
-
-
-RELEASE_GUARDS_WORKFLOW = Path(__file__).parents[2] / ".github" / "workflows" / "release-guards.yml"
+    assert re.search(r"^  rust:\n", workflow, re.MULTILINE) is None
+    assert "cargo build" not in workflow
+    assert "rustup" not in workflow
+    assert "- rust" not in required_job
 
 
 def _pull_request_trigger_types(text: str) -> set[str]:
@@ -133,23 +121,18 @@ def test_ci_matrix_does_not_restart_on_pr_metadata_edits() -> None:
     assert "cancel-in-progress: true" in workflow
     assert _pull_request_trigger_types(workflow) == {"opened", "reopened", "synchronize", "ready_for_review"}
 
-    # The PR-body-dependent release guards live in release-guards.yml, and the
-    # aggregate must not reference a job that no longer exists here.
+    # Retired publishing guards must not remain in the aggregate.
     assert re.search(r"^  beta-release-guard:\n", workflow, re.MULTILINE) is None
     assert re.search(r"^  stable-release-guard:\n", workflow, re.MULTILINE) is None
     assert "- beta-release-guard" not in _job_block(workflow, "ci-required")
 
 
-def test_release_guards_revalidate_pr_metadata_edits_in_their_own_workflow() -> None:
-    workflow = RELEASE_GUARDS_WORKFLOW.read_text(encoding="utf-8")
+def test_ci_dependencies_reference_retained_jobs_only() -> None:
+    import yaml
 
-    assert _pull_request_trigger_types(workflow) == {"opened", "reopened", "synchronize", "edited", "ready_for_review"}
-    assert "group: ${{ github.workflow }}-${{ github.ref }}" in workflow
-
-    beta_job = _job_block(workflow, "beta-release-guard")
-    stable_job = _job_block(workflow, "stable-release-guard")
-    # Check context names are unchanged from their ci.yml days.
-    assert "name: Beta release guard" in beta_job
-    assert "python -m scripts.guard_beta_release" in beta_job
-    assert "name: Stable release guard" in stable_job
-    assert "python -m scripts.guard_stable_release" in stable_job
+    jobs = yaml.safe_load(_ci_workflow_text())["jobs"]
+    assert not {"contributors", "helm-lint", "helm-smoke-kind", "nix-flake"} & jobs.keys()
+    for job in jobs.values():
+        needs = job.get("needs", [])
+        dependencies = [needs] if isinstance(needs, str) else needs
+        assert set(dependencies) <= jobs.keys()

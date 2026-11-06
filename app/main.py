@@ -22,6 +22,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from starlette.staticfiles import StaticFiles
 
+from app import __version__
 from app.core.audit.service import drain_audit_log_tasks
 from app.core.auth.dashboard_users_cache import get_dashboard_users_cache
 from app.core.auth.guardian import build_auth_guardian_scheduler
@@ -29,7 +30,6 @@ from app.core.auth.providers.registry import get_auth_provider_registry
 from app.core.balancer import configure_replica_salt
 from app.core.bootstrap import ensure_auto_bootstrap_token, log_bootstrap_token
 from app.core.clients.http import close_http_client, init_http_client
-from app.core.clients.native_egress import close_discovered_native_egress_client
 from app.core.config.dashboard_overrides import effective_settings
 from app.core.config.key_fingerprint import verify_encryption_key_fingerprint
 from app.core.config.settings import (
@@ -85,7 +85,6 @@ from app.db.session import (
     init_db,
     mark_sqlite_shutdown_clean,
 )
-from app.modules.accounts import api as accounts_api
 from app.modules.accounts.deletion import build_account_deletion_scheduler
 from app.modules.accounts.repository import AccountsRepository
 from app.modules.accounts.usage_rollup_scheduler import build_account_usage_rollup_scheduler
@@ -94,10 +93,7 @@ from app.modules.api_keys.last_used_coalescer import build_api_key_last_used_flu
 from app.modules.api_keys.reset_scheduler import build_api_key_limit_reset_scheduler
 from app.modules.audit import api as audit_api
 from app.modules.auth_providers import api as auth_providers_api
-from app.modules.automations import api as automations_api
 from app.modules.automations.scheduler import build_automations_scheduler
-from app.modules.cache_isolation_probe import api as cache_isolation_probe_api
-from app.modules.conversation_archive import api as conversation_archive_api
 from app.modules.dashboard import api as dashboard_api
 from app.modules.dashboard_auth import api as dashboard_auth_api
 from app.modules.dashboard_roles import api as dashboard_roles_api
@@ -107,8 +103,6 @@ from app.modules.firewall import api as firewall_api
 from app.modules.fleet import api as fleet_api
 from app.modules.health import api as health_api
 from app.modules.model_sources import api as model_sources_api
-from app.modules.oauth import api as oauth_api
-from app.modules.proxy import api as proxy_api
 from app.modules.proxy.cap_partitioning import refresh_cap_partition
 from app.modules.proxy.durable_bridge_coordinator import DurableBridgeSessionCoordinator
 from app.modules.proxy.durable_bridge_repository import (
@@ -123,9 +117,7 @@ from app.modules.proxy.ring_membership import (
     RING_STALE_THRESHOLD_SECONDS,
     RingMembershipService,
 )
-from app.modules.quota_planner import api as quota_planner_api
 from app.modules.quota_planner.scheduler import build_quota_planner_scheduler
-from app.modules.rate_limit_reset_credits import api as rate_limit_reset_credits_api
 from app.modules.reports import api as reports_api
 from app.modules.reports.cache import ReportsCaches
 from app.modules.request_logs import api as request_logs_api
@@ -135,7 +127,6 @@ from app.modules.scim import api as scim_api
 from app.modules.scim import management_api as scim_tokens_api
 from app.modules.settings import api as settings_api
 from app.modules.settings.service import warn_environment_shadowed_by_dashboard
-from app.modules.sticky_sessions import api as sticky_sessions_api
 from app.modules.sticky_sessions.cleanup_scheduler import (
     OperationRetentionCleanupResult,
     _abandoned_bridge_retention_seconds,
@@ -145,7 +136,6 @@ from app.modules.sticky_sessions.cleanup_scheduler import (
 )
 from app.modules.telemetry import api as telemetry_api
 from app.modules.telemetry.scheduler import build_telemetry_scheduler
-from app.modules.usage import api as usage_api
 from app.modules.usage.additional_quota_keys import reload_additional_quota_registry
 from app.modules.usage.live_ingest import start_live_usage_ingestor, stop_live_usage_ingestor
 
@@ -317,11 +307,12 @@ async def _drain_detached_control_plane_tasks(timeout_seconds: float) -> bool:
         results = await asyncio.gather(
             drain_audit_log_tasks(remaining),
             fleet_api.drain_background_refresh_tasks(remaining),
+            telemetry_api.drain_opt_out_tasks(remaining),
             return_exceptions=True,
         )
 
         clean_pass = True
-        for task_kind, result in zip(("audit log", "fleet refresh"), results, strict=True):
+        for task_kind, result in zip(("audit log", "fleet refresh", "telemetry opt-out"), results, strict=True):
             if isinstance(result, BaseException):
                 clean_pass = False
                 logger.warning(
@@ -956,10 +947,7 @@ async def lifespan(app: FastAPI):
         # potentially wedged cancellation, so shutdown always proceeds.
         leader_lease_release_completed = await _release_leader_lease_within(10)
         try:
-            try:
-                await close_discovered_native_egress_client()
-            finally:
-                await close_http_client()
+            await close_http_client()
         finally:
             try:
                 if metrics_server_task is not None:
@@ -980,18 +968,22 @@ async def lifespan(app: FastAPI):
 
 
 def create_app() -> FastAPI:
+    from app.modules.swissai.api import proxy_router as swissai_proxy_router
+    from app.modules.swissai.api import router as swissai_router
+    from app.modules.swissai.runtime import lifespan as swissai_lifespan
+
     settings = get_settings()
     configure_memory_monitor(reject_threshold_mb=settings.memory_reject_threshold_mb)
     app = FastAPI(
-        title="codex-lb",
-        version="0.1.0",
-        lifespan=lifespan,
+        title="swissai-lb",
+        version=__version__,
+        lifespan=swissai_lifespan,
         swagger_ui_parameters={"persistAuthorization": True},
     )
     if settings.otel_enabled:
         from app.core.tracing.otel import init_tracing
 
-        init_tracing(service_name="codex-lb", endpoint=settings.otel_exporter_endpoint, app=app)
+        init_tracing(service_name="swissai-lb", endpoint=settings.otel_exporter_endpoint, app=app)
 
     # Innermost of the app-level middlewares: binds the dashboard-managed
     # settings overrides (C2-1 timeouts) for the request/socket once the
@@ -1029,45 +1021,37 @@ def create_app() -> FastAPI:
     add_exception_handlers(app)
     add_trusted_proxy_headers_middleware(app)
 
-    app.include_router(proxy_api.realtime_call_router)
-    app.include_router(proxy_api.router)
-    app.include_router(proxy_api.internal_router)
-    app.include_router(proxy_api.ws_router)
-    app.include_router(proxy_api.wham_router)
-    app.include_router(proxy_api.v1_router)
-    app.include_router(proxy_api.v1_ws_router)
-    app.include_router(proxy_api.transcribe_router)
-    app.include_router(proxy_api.files_router)
-    app.include_router(proxy_api.usage_router)
-    app.include_router(audit_api.router)
-    app.include_router(accounts_api.router)
-    app.include_router(rate_limit_reset_credits_api.router)
-    app.include_router(dashboard_api.router)
-    app.include_router(usage_api.router)
-    app.include_router(request_logs_api.router)
-    app.include_router(request_logs_api.conversations_router)
-    app.include_router(quota_planner_api.router)
-    app.include_router(reports_api.router)
-    app.include_router(conversation_archive_api.router)
-    app.include_router(runtime_api.router)
-    app.include_router(oauth_api.router)
-    app.include_router(dashboard_auth_api.router)
-    app.include_router(dashboard_users_api.router)
-    app.include_router(dashboard_roles_api.router)
-    app.include_router(auth_providers_api.router)
-    app.include_router(role_mappings_api.router)
-    app.include_router(scim_api.router)
-    app.include_router(scim_tokens_api.router)
-    app.include_router(settings_api.router)
-    app.include_router(telemetry_api.router)
-    app.include_router(firewall_api.router)
-    app.include_router(fleet_api.router)
-    app.include_router(sticky_sessions_api.router)
-    app.include_router(cache_isolation_probe_api.router)
-    app.include_router(automations_api.router)
-    app.include_router(api_keys_api.router)
-    app.include_router(model_sources_api.router)
-    app.include_router(health_api.router)
+    # Only the SwissAI adapter owns inference routes. Subscription/OAuth,
+    # quota-reset, file/image/audio and WebSocket routers are not registered.
+    app.include_router(swissai_proxy_router)
+    app.include_router(swissai_router)
+    for router in (
+        audit_api.router,
+        dashboard_api.router,
+        request_logs_api.router,
+        request_logs_api.conversations_router,
+        reports_api.router,
+        runtime_api.router,
+        dashboard_auth_api.router,
+        dashboard_users_api.router,
+        dashboard_roles_api.router,
+        auth_providers_api.router,
+        role_mappings_api.router,
+        scim_api.router,
+        scim_tokens_api.router,
+        settings_api.router,
+        telemetry_api.router,
+        firewall_api.router,
+        api_keys_api.router,
+        health_api.router,
+        fleet_api.router,
+    ):
+        app.include_router(router)
+    # Client-key assignment pickers use the upstream source identity (the
+    # SwissAI key ID). Keep the safe inventory reads, never generic mutations.
+    for route in model_sources_api.router.routes:
+        if getattr(route, "methods", set()) == {"GET"}:
+            app.router.routes.append(route)
 
     static_dir = Path(__file__).parent / "static"
     index_html = static_dir / "index.html"

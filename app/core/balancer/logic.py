@@ -1189,7 +1189,7 @@ def _default_replica_salt() -> str:
     global _process_replica_salt
     if _process_replica_salt is None:
         hostname = socket.gethostname().strip()
-        _process_replica_salt = hostname or "codex-lb"
+        _process_replica_salt = hostname or "swissai-lb"
     return _process_replica_salt
 
 

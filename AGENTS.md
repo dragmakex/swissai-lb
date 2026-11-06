@@ -36,7 +36,7 @@ This repo uses **OpenSpec as the primary workflow and SSOT** for change-driven d
 
 ## Documentation & Release Notes
 
-- **OpenSpec is the SSOT for feature/behavior documentation.** User-facing rendering lives under `docs/` (the published docs pages), and each spec-governed page MUST link back to the owning `openspec/specs/<capability>/` entry. Do not create `docs/` content that has no OpenSpec counterpart, and do not add feature docs as new README sections. Keep normative requirements in `openspec/specs/<capability>/spec.md` and free-form rationale in the capability's `context.md` (or change-level context under `openspec/changes/<change>/context.md`).
+- **OpenSpec is the SSOT for feature/behavior documentation.** This fork has no maintained MkDocs site. Keep the README a short quickstart; requirements belong in `openspec/specs/<capability>/spec.md` and narrative guidance in the capability's `context.md`, `ops.md` or `reference.md` (or change-level context under `openspec/changes/<change>/context.md`). Any future user-facing rendering MUST link to its owning capability and MUST NOT become a second source of truth.
 - **Do not edit `CHANGELOG.md` directly.** Leave changelog updates to the release process; record change notes in OpenSpec artifacts instead.
 
 ### Documentation Model (Spec + Context)
@@ -137,6 +137,6 @@ These rules encode recurring review blockers observed across codex-lb PRs.
   need a why-not-a-default justification in the PR body; README top-level
   sections, `.env.example`, and dashboard core-nav items are budgeted per
   `.github/simplicity-budgets.toml` and exceptions need the maintainer-applied
-  `simplicity-budget-approved` label; feature documentation goes to `docs/` +
-  openspec (never new README sections); dashboard-visible PRs include
+  `simplicity-budget-approved` label; feature documentation stays under its
+  OpenSpec owner (never new README sections); dashboard-visible PRs include
   before/after screenshots.
