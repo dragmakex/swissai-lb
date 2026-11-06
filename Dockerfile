@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 FROM ghcr.io/astral-sh/uv:0.13.1 AS uv-bin
 
-FROM oven/bun:1.4.3-alpine AS frontend-build
+FROM oven/bun:1.4.4-alpine AS frontend-build
 
 WORKDIR /app/frontend
 
