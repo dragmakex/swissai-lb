@@ -86,7 +86,7 @@ dev = [
     "pytest-timeout>=2.4.0",
     "httpx>=0.28.1",
     "ruff>=0.14.13",
-    "ty==0.0.78",
+    "ty==0.0.96",
     "openai>=2.16.0",
     "pytest-xdist>=3.8.0",
     "pytest-cov>=7.1.0",
@@ -133,7 +133,7 @@ swissai-lb = "app.cli:main"
 swissai-lb-db = "app.db.migrate:main"
 
 [build-system]
-requires = ["hatchling==1.32.0"]
+requires = ["hatchling==1.33.0"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build]
