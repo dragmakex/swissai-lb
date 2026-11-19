@@ -26,6 +26,16 @@ from app.db.models import (
 from app.db.session import get_background_session, sqlite_writer_section
 from app.modules.swissai.policy import Failure, PoolSettings
 
+# SwissAI enforces a per-key request rate (currently 15/minute). The pool has
+# to budget that rate across the keys; in-flight leases alone still let a key
+# take a fast burst and then cool down for the rest of the upstream window.
+# Its limiter is a weighted fixed-minute window: the previous minute's count
+# contributes for the remaining overlap with the current minute. Counting only
+# the last 60 seconds here under-estimates that bucket and still produces 429s,
+# so mirror upstream's weighted calculation.
+KEY_REQUESTS_PER_MINUTE = 15
+KEY_RATE_WINDOW_SECONDS = 60
+
 
 @dataclass(frozen=True)
 class SelectedKey:
@@ -286,6 +296,33 @@ async def select_key(
                 select(SwissAILease.source_id, func.count()).group_by(SwissAILease.source_id)
             )
         }
+        minute_start = now.replace(second=0, microsecond=0)
+        previous_minute_start = minute_start - timedelta(seconds=KEY_RATE_WINDOW_SECONDS)
+        elapsed_in_minute = (now - minute_start).total_seconds()
+        previous_weight = (KEY_RATE_WINDOW_SECONDS - elapsed_in_minute) / KEY_RATE_WINDOW_SECONDS
+        rate_counts = {
+            source_id: (current, previous)
+            for source_id, current, previous in await session.execute(
+                select(
+                    SwissAIAttempt.source_id,
+                    func.sum(case((SwissAIAttempt.started_at >= minute_start, 1), else_=0)),
+                    func.sum(
+                        case(
+                            (
+                                and_(
+                                    SwissAIAttempt.started_at >= previous_minute_start,
+                                    SwissAIAttempt.started_at < minute_start,
+                                ),
+                                1,
+                            ),
+                            else_=0,
+                        )
+                    ),
+                )
+                .where(SwissAIAttempt.started_at >= previous_minute_start)
+                .group_by(SwissAIAttempt.source_id)
+            )
+        }
         candidates = []
         cooldowns = []
         for state in states:
@@ -300,6 +337,10 @@ async def select_key(
                 continue
             if state.cooldown_until and state.cooldown_until > now:
                 cooldowns.append((state.cooldown_until - now).total_seconds())
+                continue
+            current, previous = rate_counts.get(source.id, (0, 0))
+            weighted_requests = int(previous or 0) * previous_weight + int(current or 0)
+            if weighted_requests + 1 > KEY_REQUESTS_PER_MINUTE:
                 continue
             candidates.append((source, state))
         usable = [
